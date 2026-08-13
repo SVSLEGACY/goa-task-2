@@ -1,0 +1,8 @@
+qdrant_db/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.idea/
+.vscode/
