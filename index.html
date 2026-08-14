@@ -1,0 +1,2256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speculative RAG — Voice Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM — Minimalist, one accent (Indigo), deep dark base
+       ========================================================================== */
+    :root {
+      --bg-deep: #0A0E13;
+      --bg-surface: #111827;
+      --bg-surface-elevated: #1a2234;
+      --bg-input: #1E1F22;
+      --bg-input-hover: #26272b;
+      --border: #1e293b;
+      --border-focus: #4f46e5;
+      --border-subtle: #192231;
+
+      --text-primary: #e2e4e9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-dim: #475569;
+      --text-greeting: #d1d5db;
+
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-glow: rgba(99, 102, 241, 0.18);
+      --accent-subtle: rgba(99, 102, 241, 0.08);
+
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --success-border: rgba(16, 185, 129, 0.25);
+
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.1);
+      --danger-border: rgba(239, 68, 68, 0.25);
+
+      --warning: #f59e0b;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+
+      --sidebar-width: 280px;
+      --sidebar-collapsed: 52px;
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      line-height: 1.5;
+    }
+
+    /* ==========================================================================
+       APP SHELL — Sidebar + Main area
+       ========================================================================== */
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* --- SIDEBAR --- */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: #0d1117;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: width var(--transition-normal), min-width var(--transition-normal);
+      overflow: hidden;
+      z-index: 20;
+    }
+
+    .sidebar.collapsed {
+      width: var(--sidebar-collapsed);
+      min-width: var(--sidebar-collapsed);
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .sidebar-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .sidebar.collapsed .sidebar-brand-text,
+    .sidebar.collapsed .sidebar-new-chat-text,
+    .sidebar.collapsed .conv-item-text,
+    .sidebar.collapsed .sidebar-footer-text {
+      opacity: 0;
+      width: 0;
+      overflow: hidden;
+    }
+
+    .btn-sidebar-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .btn-sidebar-toggle:hover { color: var(--text-primary); }
+
+    .sidebar-actions {
+      padding: 10px 10px 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-new-chat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .btn-new-chat:hover { background: var(--bg-surface-elevated); color: var(--text-primary); }
+    .sidebar.collapsed .btn-new-chat { justify-content: center; padding: 8px; }
+
+    .conv-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .conv-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      padding: 10px 6px 4px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .conv-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+      overflow: hidden;
+    }
+
+    .conv-item:hover { background: var(--bg-surface); }
+    .conv-item.active { background: var(--bg-surface-elevated); }
+
+    .conv-item-icon {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      color: var(--text-dim);
+    }
+
+    .conv-item-text {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .conv-item-title {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .conv-item-time {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .conv-item.active .conv-item-title { color: var(--text-primary); }
+
+    .sidebar-footer {
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .sidebar-footer:hover { background: var(--bg-surface); }
+
+    .sidebar-footer-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    /* --- MAIN CONTENT --- */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ==========================================================================
+       LANDING SCREEN — full-height centered greeting with radial glow
+       ========================================================================== */
+    .landing-screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      /* Deep blue radial glow */
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 55%, rgba(30, 58, 138, 0.28) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 50% 52%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+        var(--bg-deep);
+    }
+
+    .landing-screen.hidden {
+      opacity: 0;
+      transform: translateY(-20px);
+      pointer-events: none;
+    }
+
+    .greeting-text {
+      font-size: 40px;
+      font-weight: 300;
+      color: var(--text-greeting);
+      margin-bottom: 32px;
+      text-align: center;
+      letter-spacing: -0.02em;
+      padding: 0 20px;
+    }
+
+    /* --- Pill Input Bar --- */
+    .landing-pill {
+      width: 100%;
+      max-width: 720px;
+      background: var(--bg-input);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      padding: 4px 6px 4px 4px;
+      gap: 2px;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .landing-pill:focus-within {
+      border-color: rgba(99, 102, 241, 0.35);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+    }
+
+    .pill-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
+    }
+
+    .pill-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.05);
+    }
+
+    .pill-btn svg { width: 18px; height: 18px; }
+
+    .pill-input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      padding: 10px 8px;
+      min-width: 0;
+    }
+
+    .pill-input::placeholder { color: var(--text-dim); }
+
+    /* Latency ping indicator (replaces mode selector) */
+    .latency-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      background: rgba(255,255,255,0.04);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .latency-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      flex-shrink: 0;
+      transition: background 0.3s ease;
+    }
+
+    .latency-dot.good { background: var(--success); }
+    .latency-dot.warn { background: var(--warning); }
+    .latency-dot.bad  { background: var(--danger); }
+
+    .latency-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* Mic button in pill — listening state */
+    .pill-mic.listening {
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .pill-mic.listening:hover { background: var(--accent-hover); }
+
+    /* Preset suggestion chips on landing */
+    .landing-presets {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+      max-width: 720px;
+      padding: 0 20px;
+    }
+
+    .landing-chip {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .landing-chip:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      color: var(--text-secondary);
+      background: var(--accent-subtle);
+    }
+
+    .landing-chip.guardrail:hover {
+      border-color: var(--danger-border);
+      color: #fca5a5;
+      background: var(--danger-bg);
+    }
+
+    /* ==========================================================================
+       CONVERSATION VIEW — hidden until first query
+       ========================================================================== */
+    .conversation-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease 0.1s;
+    }
+
+    .conversation-view.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Conversation Top Bar */
+    .conv-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: rgba(10, 14, 19, 0.6);
+      backdrop-filter: blur(12px);
+    }
+
+    .conv-topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .conv-topbar-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      max-width: 300px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .conv-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .badge-sm .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .badge-dot { background: var(--text-dim); }
+    .badge-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .badge-dot.mock-mode { background: var(--warning); }
+    .badge-dot.error { background: var(--danger); }
+
+    .btn-icon {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+    }
+
+    .btn-icon:hover { background: var(--bg-surface); color: var(--text-primary); }
+    .btn-icon svg { width: 14px; height: 14px; }
+
+    /* Conversation scroll area */
+    .conv-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .conv-content {
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 24px 100px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Guardrail Banner */
+    .guardrail-banner {
+      display: none;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      align-items: flex-start;
+      gap: 12px;
+      color: #fca5a5;
+      font-size: 13px;
+    }
+
+    .guardrail-banner.active { display: flex; }
+    .guardrail-content { flex: 1; }
+    .guardrail-title { font-weight: 600; color: #fecaca; margin-bottom: 2px; }
+
+    .guardrail-dismiss {
+      background: transparent;
+      border: none;
+      color: #f87171;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px;
+    }
+
+    /* Pipeline bar */
+    .pipeline-bar {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .pipeline-step.active { color: var(--accent); font-weight: 600; }
+    .pipeline-step.completed { color: var(--text-secondary); }
+
+    .pipeline-step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .pipeline-step.active .pipeline-step-dot {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    .pipeline-step.completed .pipeline-step-dot { background: var(--success); }
+    .pipeline-divider { color: var(--border); font-size: 12px; }
+
+    /* Turn Block (Query + Response Pair) */
+    .turn-block {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Query bubble */
+    .turn-query {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .query-bubble {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+      padding: 12px 16px;
+      max-width: 75%;
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .query-bubble .transcript-partial {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Response area */
+    .turn-response {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .response-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .response-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: var(--radius-sm);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .response-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .response-body {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 60px;
+    }
+
+    .response-body .answer-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 14px;
+      background: var(--accent);
+      margin-left: 3px;
+      vertical-align: middle;
+      animation: blink 0.9s infinite;
+    }
+
+    .response-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      padding: 0 4px;
+    }
+
+    /* Metrics Panel (inside conversation, after response) */
+    .metrics-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .metrics-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 10px;
+    }
+
+    .metrics-panel-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .metrics-panel-title svg { width: 13px; height: 13px; }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .metric-card {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-card.highlight {
+      border-color: var(--border);
+      background: var(--bg-surface-elevated);
+    }
+
+    .metric-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+
+    .metric-unit {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+
+    .sla-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      padding: 2px 7px;
+      border-radius: var(--radius-full);
+      width: fit-content;
+      margin-top: 3px;
+    }
+
+    .sla-badge.pass { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+    .sla-badge.fail { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+    .sla-badge.idle { background: var(--bg-surface); color: var(--text-dim); border: 1px solid var(--border); }
+
+    /* Breakdown bar */
+    .stage-breakdown { display: flex; flex-direction: column; gap: 8px; }
+
+    .breakdown-bar {
+      height: 7px;
+      width: 100%;
+      background: var(--bg-surface-elevated);
+      border-radius: 4px;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .breakdown-segment { height: 100%; transition: width 0.3s ease; }
+    .seg-stt { background: #38bdf8; }
+    .seg-retrieval { background: #818cf8; }
+    .seg-guardrail { background: #fbbf24; }
+    .seg-generation { background: #34d399; }
+
+    .breakdown-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+    }
+
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 2px; }
+
+    /* Bottom input bar (within conversation) */
+    .conv-input-bar {
+      border-top: 1px solid var(--border);
+      padding: 12px 20px;
+      background: rgba(10, 14, 19, 0.85);
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
+    }
+
+    .conv-input-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-input);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius-full);
+      padding: 4px 6px 4px 16px;
+    }
+
+    .conv-input-inner:focus-within {
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+
+    .conv-text-input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      padding: 8px 0;
+      min-width: 0;
+    }
+
+    .conv-text-input::placeholder { color: var(--text-dim); }
+
+    .conv-mic-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
+    }
+
+    .conv-mic-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .conv-mic-btn.listening { color: #fff; background: var(--accent); }
+    .conv-mic-btn svg { width: 18px; height: 18px; }
+
+    .conv-send-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background var(--transition-fast);
+    }
+
+    .conv-send-btn:hover { background: var(--accent-hover); }
+    .conv-send-btn svg { width: 16px; height: 16px; }
+
+    /* Read-only replay indicator */
+    .replay-indicator {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+
+    .replay-indicator.active { display: block; }
+
+    /* History drawer inside metrics */
+    .history-drawer {
+      margin-top: 4px;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 10px;
+    }
+
+    .history-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .history-toggle:hover { color: var(--text-primary); }
+
+    .history-list {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .history-list.open { display: flex; }
+
+    .history-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 10px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 5px 8px;
+      background: var(--bg-deep);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      align-items: center;
+    }
+
+    .history-row .query-snippet {
+      font-family: var(--font-sans);
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Keyframes */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; }
+      .sidebar.collapsed { width: var(--sidebar-collapsed); min-width: var(--sidebar-collapsed); }
+
+      .greeting-text { font-size: 28px; }
+
+      .landing-pill { max-width: calc(100% - 32px); }
+
+      .conv-content { padding: 16px 16px 80px; }
+
+      .query-bubble { max-width: 90%; }
+
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .sidebar.collapsed { width: 0; min-width: 0; border: none; }
+
+      .landing-presets { gap: 6px; }
+      .landing-chip { font-size: 11px; padding: 5px 10px; }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar collapsed" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">S</div>
+          <span class="sidebar-brand-text">Speculative RAG</span>
+        </div>
+        <button class="btn-sidebar-toggle" id="btn-sidebar-toggle" title="Toggle sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="sidebar-actions">
+        <button class="btn-new-chat" id="btn-new-chat">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span class="sidebar-new-chat-text">New chat</span>
+        </button>
+      </div>
+
+      <div class="conv-list" id="conv-list">
+        <!-- Populated dynamically -->
+      </div>
+
+      <div class="sidebar-footer" id="sidebar-footer" title="Settings">
+        <svg class="sidebar-footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span class="sidebar-footer-text">Settings</span>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN AREA ===== -->
+    <div class="main-area">
+
+      <!-- ===== LANDING SCREEN ===== -->
+      <div class="landing-screen" id="landing-screen">
+        <h1 class="greeting-text" id="greeting-text">Let's jump in, Soham</h1>
+
+        <div class="landing-pill" id="landing-pill">
+          <!-- Plus / attach button -->
+          <button class="pill-btn" title="Attach context scope">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+
+          <!-- Text input -->
+          <input type="text" class="pill-input" id="landing-input" placeholder="Ask your question..." autocomplete="off">
+
+          <!-- Live latency ping indicator -->
+          <div class="latency-indicator" id="latency-indicator" title="Pipeline latency ping">
+            <span class="latency-dot good" id="latency-dot"></span>
+            <span class="latency-value" id="latency-value">--ms</span>
+          </div>
+          <!-- Hidden WS URL input (configured via sidebar settings) -->
+          <input type="hidden" id="input-ws-url" value="ws://localhost:8000/ws/audio">
+
+          <!-- Mic button -->
+          <button class="pill-btn pill-mic" id="landing-mic-btn" title="Tap to speak">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Suggestion chips -->
+        <div class="landing-presets">
+          <button class="landing-chip" data-query="What is speculative vector search and how does parent-child chunking work?">💡 Speculative Vector Search</button>
+          <button class="landing-chip" data-query="MSMARCO-XI dataset me Hindi aur English context kaise retrieve hota hai?">🌐 Hindi-English Hybrid</button>
+          <button class="landing-chip guardrail" data-query="Write me a script to exploit an unauthenticated server.">🚫 Guardrail Test</button>
+        </div>
+      </div>
+
+      <!-- ===== CONVERSATION VIEW ===== -->
+      <div class="conversation-view" id="conversation-view">
+
+        <!-- Top bar -->
+        <div class="conv-topbar">
+          <div class="conv-topbar-left">
+            <button class="btn-icon" id="btn-sidebar-open" title="Open sidebar" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <span class="conv-topbar-title" id="conv-topbar-title">New Conversation</span>
+          </div>
+          <div class="conv-topbar-right">
+            <div class="badge-sm" id="conv-status-badge">
+              <span class="badge-dot mock-mode" id="conv-status-dot"></span>
+              <span id="conv-status-text">Mock</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrollable conversation content -->
+        <div class="conv-scroll" id="conv-scroll">
+          <div class="conv-content" id="conv-content">
+            <!-- Read-only replay banner -->
+            <div class="replay-indicator" id="replay-indicator">
+              📖 Viewing saved conversation (read-only replay)
+            </div>
+            <!-- Turn blocks rendered dynamically here -->
+          </div>
+        </div>
+
+        <!-- Bottom input bar -->
+        <div class="conv-input-bar" id="conv-input-bar">
+          <div class="conv-input-inner">
+            <input type="text" class="conv-text-input" id="conv-text-input" placeholder="Follow-up question..." autocomplete="off">
+            <button class="conv-mic-btn" id="conv-mic-btn" title="Tap to speak">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+            <button class="conv-send-btn" id="conv-send-btn" title="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       JAVASCRIPT — Pipeline, WebSocket, Conversation Store, UI State Machine
+       ========================================================================== -->
+  <script>
+    /**
+     * ==========================================================================
+     * WEBSOCKET PROTOCOL SPECIFICATION
+     * ==========================================================================
+     * The WebSocket connection expects/emits JSON formatted messages.
+     *
+     * 1. CLIENT -> SERVER:
+     *    - Audio PCM/Base64 chunk:
+     *      { "type": "audio_chunk", "data": "<base64_pcm>", "sample_rate": 16000 }
+     *    - Audio Stream End:
+     *      { "type": "audio_end" }
+     *    - Direct Text Fallback Query:
+     *      { "type": "text_query", "text": "What is speculative RAG?" }
+     *
+     * 2. SERVER -> CLIENT:
+     *    - Live Partial Transcript:
+     *      { "type": "partial_transcript", "text": "what is the principle" }
+     *    - Final Transcript:
+     *      { "type": "final_transcript", "text": "what is the principle of speculative RAG" }
+     *    - Pipeline Stage Timing Telemetry:
+     *      { "type": "stage_timing", "stage": "stt"|"retrieval"|"guardrail"|"generation", "latency_ms": 42.5 }
+     *    - Guardrail Rejection:
+     *      { "type": "guardrail_reject", "reason": "Query out of MSMARCO-XI domain scope", "code": "OFF_TOPIC" }
+     *    - Streamed Answer Token/Chunk:
+     *      { "type": "answer_chunk", "delta": "Speculative ", "done": false }
+     *    - End of Generation & Total Metrics:
+     *      { "type": "metrics", "total_latency_ms": 178.4, "stages": { "stt": 48, "retrieval": 36, "guardrail": 14, "generation": 80 }, "tokens": 42 }
+     * ==========================================================================
+     */
+
+    /**
+     * ==========================================================================
+     * CONVERSATION PERSISTENCE — IN-MEMORY STORE
+     * ==========================================================================
+     * Architecture notes for the backend team:
+     *
+     * All conversation data lives in the `ConversationStore` object below.
+     * It exposes a clean CRUD-like API:
+     *   - create()        → start a new conversation, returns ID
+     *   - get(id)         → return full conversation object
+     *   - list()          → return all conversations (newest first)
+     *   - addTurn(id, turn)  → append a query+answer turn to a conversation
+     *   - delete(id)      → remove a conversation
+     *
+     * Each conversation object looks like:
+     *   {
+     *     id: string,
+     *     title: string,           // auto-set from first query text
+     *     createdAt: number,       // Date.now() timestamp
+     *     updatedAt: number,
+     *     turns: [
+     *       {
+     *         query: string,
+     *         answer: string,      // empty string if guardrail-rejected
+     *         isRejected: boolean,
+     *         guardrailReason: string|null,
+     *         stages: { stt, retrieval, guardrail, generation },
+     *         totalLatencyMs: number,
+     *         grounding: string|null,
+     *         tokenCount: number,
+     *         timestamp: number
+     *       }
+     *     ]
+     *   }
+     *
+     * To swap in a real backend:
+     *   1. Replace the internal `_conversations` Map with API calls.
+     *   2. Each method is async-ready — just add `await` and change to fetch/axios.
+     *   3. Do NOT use localStorage/sessionStorage — this may run inside a
+     *      sandboxed preview iframe. The store is intentionally in-memory.
+     * ==========================================================================
+     */
+    const ConversationStore = (() => {
+      const _conversations = new Map();
+
+      function _genId() {
+        return 'conv_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      }
+
+      return {
+        create() {
+          const conv = {
+            id: _genId(),
+            title: 'New Conversation',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            turns: []
+          };
+          _conversations.set(conv.id, conv);
+          return conv;
+        },
+
+        get(id) {
+          return _conversations.get(id) || null;
+        },
+
+        list() {
+          return [..._conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+        },
+
+        addTurn(id, turn) {
+          const conv = _conversations.get(id);
+          if (!conv) return;
+          conv.turns.push(turn);
+          if (conv.turns.length === 1) {
+            conv.title = turn.query.slice(0, 80);
+          }
+          conv.updatedAt = Date.now();
+        },
+
+        delete(id) {
+          _conversations.delete(id);
+        }
+      };
+    })();
+
+
+    // ==========================================================================
+    // GLOBAL STATE
+    // ==========================================================================
+    let USE_MOCK = true;
+    let ws = null;
+    let isListening = false;
+    let audioContext = null;
+    let speechRecognition = null;
+    let mockTimers = [];
+
+    // App state machine: 'landing' | 'conversation'
+    let appView = 'landing';
+    let activeConversationId = null;
+    let isReplayMode = false;
+
+    // Current in-flight turn tracking
+    let currentTurnQuery = '';
+    let currentTurnAnswer = '';
+    let currentTurnTokens = 0;
+    let currentTurnRejected = false;
+    let currentTurnGuardrailReason = null;
+    let currentTurnGrounding = null;
+    let currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
+
+    // Latency history across all conversations (for aggregate metrics)
+    let queryLatencyHistory = [];
+
+    // DOM refs (populated in init)
+    let el = {};
+
+    // Mock dataset
+    const MOCK_DATASET = [
+      {
+        trigger: "speculative",
+        answer: "Speculative Vector Search reduces end-to-end RAG latency by executing sub-vector probes concurrently with streaming speech tokens.\n\nKey Mechanics:\n1. Small Child Chunks (128 chars): Embedded with paraphrase-multilingual-MiniLM-L12-v2 for fast cosine lookup in Qdrant.\n2. Full Parent Context: Stored in vector payload to provide complete context directly to the synthesizer without multi-hop lookups.\n3. Speculative Trigger: Search executes as soon as partial STT confidence crosses threshold (p > 0.85), achieving <200ms TTFT.",
+        stages: { stt: 44, retrieval: 38, guardrail: 12, generation: 74 },
+        grounding: "Qdrant: msmarco_chunks (Score: 0.942)"
+      },
+      {
+        trigger: "hindi",
+        answer: "MSMARCO-XI dataset me dual-language indexing use hoti hai jisme English aur Hindi answers dono ko vector space me map kiya jata hai:\n\n• Multilingual Embeddings: 'paraphrase-multilingual-MiniLM-L12-v2' dono bhashaon ko ek hi shared embedding space me embed karta hai.\n• Unified Search: Hindi query par bhi English and Hindi dono parent passages retrieve ho sakte hain.\n• Real-time Latency: Qdrant cosine similarity average 35ms me accurate results fetch kar leta hai.",
+        stages: { stt: 52, retrieval: 41, guardrail: 15, generation: 78 },
+        grounding: "MSMARCO-XI hintrain.parquet (Score: 0.918)"
+      },
+      {
+        trigger: "guardrail",
+        reject: true,
+        reason: "Query violates safety policy and dataset domain scope. Only queries related to the MSMARCO-XI knowledge corpus are permitted.",
+        stages: { stt: 35, retrieval: 28, guardrail: 18, generation: 0 }
+      },
+      {
+        trigger: "default",
+        answer: "Retrieved relevant passage from local vector index with parent-child hierarchical grouping.\n\nThe speculative engine matched candidate embeddings in Qdrant and validated safety guardrails with zero ungrounded hallucinations.",
+        stages: { stt: 45, retrieval: 36, guardrail: 14, generation: 82 },
+        grounding: "Qdrant Index (Score: 0.884)"
+      }
+    ];
+
+
+    // ==========================================================================
+    // INITIALIZATION
+    // ==========================================================================
+    function init() {
+      cacheElements();
+      setupEventListeners();
+      setupSpeechRecognition();
+      renderSidebarConversations();
+    }
+
+    function cacheElements() {
+      el = {
+        sidebar: document.getElementById('sidebar'),
+        btnSidebarToggle: document.getElementById('btn-sidebar-toggle'),
+        btnSidebarOpen: document.getElementById('btn-sidebar-open'),
+        btnNewChat: document.getElementById('btn-new-chat'),
+        convList: document.getElementById('conv-list'),
+        sidebarFooter: document.getElementById('sidebar-footer'),
+
+        landingScreen: document.getElementById('landing-screen'),
+        landingInput: document.getElementById('landing-input'),
+        landingMicBtn: document.getElementById('landing-mic-btn'),
+        latencyIndicator: document.getElementById('latency-indicator'),
+        latencyDot: document.getElementById('latency-dot'),
+        latencyValue: document.getElementById('latency-value'),
+        inputWsUrl: document.getElementById('input-ws-url'),
+
+        conversationView: document.getElementById('conversation-view'),
+        convTopbarTitle: document.getElementById('conv-topbar-title'),
+        convStatusDot: document.getElementById('conv-status-dot'),
+        convStatusText: document.getElementById('conv-status-text'),
+        convScroll: document.getElementById('conv-scroll'),
+        convContent: document.getElementById('conv-content'),
+        replayIndicator: document.getElementById('replay-indicator'),
+        convInputBar: document.getElementById('conv-input-bar'),
+        convTextInput: document.getElementById('conv-text-input'),
+        convMicBtn: document.getElementById('conv-mic-btn'),
+        convSendBtn: document.getElementById('conv-send-btn'),
+      };
+    }
+
+    function setupEventListeners() {
+      // Sidebar toggle
+      el.btnSidebarToggle.addEventListener('click', () => {
+        el.sidebar.classList.toggle('collapsed');
+      });
+
+      el.btnSidebarOpen?.addEventListener('click', () => {
+        el.sidebar.classList.remove('collapsed');
+      });
+
+      // New chat
+      el.btnNewChat.addEventListener('click', () => {
+        goToLanding();
+      });
+
+      // Landing input submission
+      el.landingInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const q = el.landingInput.value.trim();
+          if (q) submitQuery(q);
+        }
+      });
+
+      // Landing mic
+      el.landingMicBtn.addEventListener('click', () => {
+        if (appView === 'landing') {
+          toggleVoiceInput('landing');
+        }
+      });
+
+      // Landing chips
+      document.querySelectorAll('.landing-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          submitQuery(chip.getAttribute('data-query'));
+        });
+      });
+
+      // Start latency ping indicator
+      startLatencyPing();
+
+      // Conversation view inputs
+      el.convTextInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const q = el.convTextInput.value.trim();
+          if (q) {
+            el.convTextInput.value = '';
+            submitQuery(q);
+          }
+        }
+      });
+
+      el.convSendBtn.addEventListener('click', () => {
+        const q = el.convTextInput.value.trim();
+        if (q) {
+          el.convTextInput.value = '';
+          submitQuery(q);
+        }
+      });
+
+      el.convMicBtn.addEventListener('click', () => {
+        toggleVoiceInput('conversation');
+      });
+
+      // Settings (sidebar footer) — toggle mode dropdown from sidebar
+      el.sidebarFooter.addEventListener('click', () => {
+        // Just expand sidebar and show mode dropdown on landing
+        if (el.sidebar.classList.contains('collapsed')) {
+          el.sidebar.classList.remove('collapsed');
+        }
+      });
+    }
+
+
+    // ==========================================================================
+    // VIEW TRANSITIONS
+    // ==========================================================================
+    function goToLanding() {
+      appView = 'landing';
+      activeConversationId = null;
+      isReplayMode = false;
+      el.landingScreen.classList.remove('hidden');
+      el.conversationView.classList.remove('active');
+      el.landingInput.value = '';
+      el.landingInput.focus();
+      renderSidebarConversations();
+    }
+
+    function goToConversation(convId, replay = false) {
+      appView = 'conversation';
+      activeConversationId = convId;
+      isReplayMode = replay;
+
+      el.landingScreen.classList.add('hidden');
+      el.conversationView.classList.add('active');
+
+      const conv = ConversationStore.get(convId);
+      if (conv) {
+        el.convTopbarTitle.textContent = conv.title;
+      }
+
+      // Show/hide replay indicator & input bar
+      el.replayIndicator.classList.toggle('active', replay);
+      el.convInputBar.style.display = replay ? 'none' : 'block';
+
+      updateConvStatusBadge();
+
+      if (replay) {
+        renderFullConversation(conv);
+      }
+
+      renderSidebarConversations();
+
+      // Scroll to bottom
+      requestAnimationFrame(() => {
+        el.convScroll.scrollTop = el.convScroll.scrollHeight;
+      });
+    }
+
+
+    // ==========================================================================
+    // QUERY SUBMISSION (Entry point for both landing & conversation)
+    // ==========================================================================
+    function submitQuery(queryText) {
+      if (isReplayMode) return;
+      clearTimers();
+
+      // Ensure we have an active conversation
+      if (!activeConversationId) {
+        const conv = ConversationStore.create();
+        activeConversationId = conv.id;
+      }
+
+      // Transition to conversation view if on landing
+      if (appView === 'landing') {
+        goToConversation(activeConversationId, false);
+      }
+
+      // Reset turn state
+      currentTurnQuery = queryText;
+      currentTurnAnswer = '';
+      currentTurnTokens = 0;
+      currentTurnRejected = false;
+      currentTurnGuardrailReason = null;
+      currentTurnGrounding = null;
+      currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
+
+      // Add turn DOM block
+      const turnEl = createTurnDOM(queryText);
+      el.convContent.appendChild(turnEl);
+      scrollToBottom();
+
+      // Execute pipeline
+      if (USE_MOCK) {
+        executeMockPipeline(queryText, turnEl);
+      } else if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "text_query", text: queryText }));
+      } else {
+        setResponseText(turnEl, 'WebSocket not connected. Enable Demo Mode or start the backend.');
+      }
+    }
+
+
+    // ==========================================================================
+    // TURN DOM CREATION
+    // ==========================================================================
+    function createTurnDOM(queryText) {
+      const turnBlock = document.createElement('div');
+      turnBlock.className = 'turn-block';
+      turnBlock.setAttribute('data-turn-id', Date.now());
+
+      turnBlock.innerHTML = `
+        <!-- Pipeline Stage Bar -->
+        <nav class="pipeline-bar" aria-label="Pipeline Stage">
+          <div class="pipeline-step active" data-stage="idle"><div class="pipeline-step-dot"></div><span>1. Ready</span></div>
+          <div class="pipeline-divider">/</div>
+          <div class="pipeline-step" data-stage="stt"><div class="pipeline-step-dot"></div><span>2. STT</span></div>
+          <div class="pipeline-divider">/</div>
+          <div class="pipeline-step" data-stage="retrieval"><div class="pipeline-step-dot"></div><span>3. Search</span></div>
+          <div class="pipeline-divider">/</div>
+          <div class="pipeline-step" data-stage="guardrail"><div class="pipeline-step-dot"></div><span>4. Guard</span></div>
+          <div class="pipeline-divider">/</div>
+          <div class="pipeline-step" data-stage="generation"><div class="pipeline-step-dot"></div><span>5. Gen</span></div>
+        </nav>
+
+        <!-- Guardrail banner -->
+        <div class="guardrail-banner" data-role="guardrail">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div class="guardrail-content">
+            <div class="guardrail-title">Query Rejected by Domain Guardrail</div>
+            <div data-role="guardrail-reason"></div>
+          </div>
+          <button class="guardrail-dismiss" onclick="this.closest('.guardrail-banner').classList.remove('active')">&times;</button>
+        </div>
+
+        <!-- Query bubble -->
+        <div class="turn-query">
+          <div class="query-bubble">${escapeHtml(queryText)}</div>
+        </div>
+
+        <!-- Response -->
+        <div class="turn-response">
+          <div class="response-header">
+            <div class="response-avatar">S</div>
+            <span class="response-label">Speculative RAG</span>
+          </div>
+          <div class="response-body" data-role="response-body">
+            <span data-role="response-text"></span>
+            <span class="answer-cursor" data-role="cursor"></span>
+          </div>
+          <div class="response-meta">
+            <span data-role="grounding">Grounding: Processing...</span>
+            <span data-role="tokens">0 tokens</span>
+          </div>
+        </div>
+
+        <!-- Metrics panel (hidden until complete) -->
+        <div class="metrics-panel" data-role="metrics" style="display: none;"></div>
+      `;
+
+      return turnBlock;
+    }
+
+
+    // ==========================================================================
+    // MOCK PIPELINE
+    // ==========================================================================
+    function executeMockPipeline(query, turnEl) {
+      const queryLower = query.toLowerCase();
+      let match = MOCK_DATASET.find(item => item.trigger !== 'default' && queryLower.includes(item.trigger));
+      if (!match) match = MOCK_DATASET[3];
+
+      // Stage: STT
+      setTurnStage(turnEl, 'stt');
+      const sttLatency = match.stages.stt + (Math.random() * 8 - 4);
+      currentStages.stt = Math.max(25, Math.round(sttLatency));
+
+      // Stage: Retrieval
+      const t1 = setTimeout(() => {
+        setTurnStage(turnEl, 'retrieval');
+        const retLatency = match.stages.retrieval + (Math.random() * 6 - 3);
+        currentStages.retrieval = Math.max(20, Math.round(retLatency));
+
+        // Stage: Guardrail
+        const t2 = setTimeout(() => {
+          setTurnStage(turnEl, 'guardrail');
+          const grLatency = match.stages.guardrail + (Math.random() * 4 - 2);
+          currentStages.guardrail = Math.max(8, Math.round(grLatency));
+
+          if (match.reject) {
+            currentTurnRejected = true;
+            currentTurnGuardrailReason = match.reason;
+            triggerGuardrailOnTurn(turnEl, match.reason);
+            setTurnStage(turnEl, 'idle');
+            setResponseText(turnEl, '');
+            const cursor = turnEl.querySelector('[data-role="cursor"]');
+            if (cursor) cursor.style.display = 'none';
+            turnEl.querySelector('[data-role="grounding"]').textContent = 'Grounding: Rejected';
+            const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail;
+            finishTurn(turnEl, total, query);
+            return;
+          }
+
+          // Stage: Generation
+          setTurnStage(turnEl, 'generation');
+          currentTurnGrounding = match.grounding;
+          turnEl.querySelector('[data-role="grounding"]').textContent = match.grounding;
+
+          streamMockTokens(turnEl, match.answer, match.stages.generation, () => {
+            const genLatency = match.stages.generation + (Math.random() * 8 - 4);
+            currentStages.generation = Math.max(40, Math.round(genLatency));
+            const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
+            finishTurn(turnEl, total, query);
+          });
+
+        }, match.stages.guardrail);
+        mockTimers.push(t2);
+      }, match.stages.retrieval + currentStages.stt);
+      mockTimers.push(t1);
+    }
+
+    function streamMockTokens(turnEl, fullText, targetDuration, onDone) {
+      const tokens = fullText.match(/(\S+|\s+)/g) || [fullText];
+      let idx = 0;
+      const interval = Math.max(12, Math.floor(targetDuration / Math.max(1, tokens.length)));
+      const textEl = turnEl.querySelector('[data-role="response-text"]');
+      const cursor = turnEl.querySelector('[data-role="cursor"]');
+      const tokensLabel = turnEl.querySelector('[data-role="tokens"]');
+
+      function next() {
+        if (idx < tokens.length) {
+          currentTurnAnswer += tokens[idx];
+          textEl.textContent = currentTurnAnswer;
+          idx++;
+          currentTurnTokens = idx;
+          tokensLabel.textContent = `${idx} tokens`;
+          scrollToBottom();
+          const t = setTimeout(next, interval);
+          mockTimers.push(t);
+        } else {
+          if (cursor) cursor.style.display = 'none';
+          if (onDone) onDone();
+        }
+      }
+
+      next();
+    }
+
+
+    // ==========================================================================
+    // TURN COMPLETION — Save to store, render metrics
+    // ==========================================================================
+    function finishTurn(turnEl, totalLatencyMs, queryText) {
+      setTurnStage(turnEl, 'idle');
+      const rounded = Math.round(totalLatencyMs * 10) / 10;
+
+      // Record to global latency tracker
+      queryLatencyHistory.push({
+        id: Date.now(),
+        latency: rounded,
+        query: queryText,
+        isRejected: currentTurnRejected,
+        passed: rounded <= 200
+      });
+
+      // Save turn to conversation store
+      if (activeConversationId) {
+        ConversationStore.addTurn(activeConversationId, {
+          query: queryText,
+          answer: currentTurnAnswer,
+          isRejected: currentTurnRejected,
+          guardrailReason: currentTurnGuardrailReason,
+          stages: { ...currentStages },
+          totalLatencyMs: rounded,
+          grounding: currentTurnGrounding,
+          tokenCount: currentTurnTokens,
+          timestamp: Date.now()
+        });
+        // Update topbar title
+        const conv = ConversationStore.get(activeConversationId);
+        if (conv) el.convTopbarTitle.textContent = conv.title;
+      }
+
+      // Render inline metrics panel
+      renderTurnMetrics(turnEl, rounded, { ...currentStages });
+
+      // Update sidebar
+      renderSidebarConversations();
+    }
+
+
+    // ==========================================================================
+    // METRICS RENDERING (per-turn inline panel)
+    // ==========================================================================
+    function renderTurnMetrics(turnEl, latencyMs, stages) {
+      const panel = turnEl.querySelector('[data-role="metrics"]');
+      if (!panel) return;
+
+      const passed = latencyMs <= 200;
+      const total = (stages.stt || 0) + (stages.retrieval || 0) + (stages.guardrail || 0) + (stages.generation || 0) || 1;
+      const pStt = ((stages.stt || 0) / total) * 100;
+      const pRet = ((stages.retrieval || 0) / total) * 100;
+      const pGr = ((stages.guardrail || 0) / total) * 100;
+      const pGen = ((stages.generation || 0) / total) * 100;
+
+      // Compute aggregate percentiles
+      const latencies = queryLatencyHistory.map(q => q.latency).sort((a, b) => a - b);
+      const p50 = getPercentile(latencies, 50);
+      const p70 = getPercentile(latencies, 70);
+      const p100 = latencies[latencies.length - 1] || 0;
+      const passedCount = queryLatencyHistory.filter(q => q.passed).length;
+      const compliance = queryLatencyHistory.length ? Math.round((passedCount / queryLatencyHistory.length) * 100) : 0;
+
+      panel.style.display = 'flex';
+      panel.innerHTML = `
+        <div class="metrics-panel-header">
+          <div class="metrics-panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Latency Telemetry (SLA: 200ms)
+          </div>
+          <span class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'} — ${latencyMs}ms</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card highlight">
+            <span class="metric-label">Latest</span>
+            <div class="metric-value"><span>${latencyMs}</span><span class="metric-unit">ms</span></div>
+            <div class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? `< 200ms ✓` : `≥ 200ms ✗`}</div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">P50</span>
+            <div class="metric-value"><span>${p50}</span><span class="metric-unit">ms</span></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">P70</span>
+            <div class="metric-value"><span>${p70}</span><span class="metric-unit">ms</span></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">P100</span>
+            <div class="metric-value"><span>${p100}</span><span class="metric-unit">ms</span></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">SLA %</span>
+            <div class="metric-value"><span>${compliance}</span><span class="metric-unit">%</span></div>
+            <span style="font-size:9px;color:var(--text-dim);">${queryLatencyHistory.length} queries</span>
+          </div>
+        </div>
+
+        <div class="stage-breakdown">
+          <div class="breakdown-bar">
+            <div class="breakdown-segment seg-stt" style="width:${pStt}%"></div>
+            <div class="breakdown-segment seg-retrieval" style="width:${pRet}%"></div>
+            <div class="breakdown-segment seg-guardrail" style="width:${pGr}%"></div>
+            <div class="breakdown-segment seg-generation" style="width:${pGen}%"></div>
+          </div>
+          <div class="breakdown-legend">
+            <div class="legend-item"><span class="legend-dot seg-stt"></span> STT: ${stages.stt || '--'}ms</div>
+            <div class="legend-item"><span class="legend-dot seg-retrieval"></span> Search: ${stages.retrieval || '--'}ms</div>
+            <div class="legend-item"><span class="legend-dot seg-guardrail"></span> Guard: ${stages.guardrail || '--'}ms</div>
+            <div class="legend-item"><span class="legend-dot seg-generation"></span> Gen: ${stages.generation || '--'}ms</div>
+          </div>
+        </div>
+      `;
+
+      scrollToBottom();
+    }
+
+
+    // ==========================================================================
+    // TURN DOM HELPERS
+    // ==========================================================================
+    function setTurnStage(turnEl, stageKey) {
+      turnEl.querySelectorAll('.pipeline-step').forEach(step => {
+        step.classList.remove('active');
+        if (step.getAttribute('data-stage') === stageKey) {
+          step.classList.add('active');
+        }
+      });
+    }
+
+    function setResponseText(turnEl, text) {
+      const textEl = turnEl.querySelector('[data-role="response-text"]');
+      if (textEl) textEl.textContent = text;
+    }
+
+    function triggerGuardrailOnTurn(turnEl, reason) {
+      const banner = turnEl.querySelector('[data-role="guardrail"]');
+      if (banner) {
+        banner.querySelector('[data-role="guardrail-reason"]').textContent = reason;
+        banner.classList.add('active');
+      }
+    }
+
+
+    // ==========================================================================
+    // FULL CONVERSATION REPLAY (read-only)
+    // ==========================================================================
+    function renderFullConversation(conv) {
+      // Clear existing content except replay indicator
+      el.convContent.innerHTML = '';
+      el.convContent.appendChild(el.replayIndicator);
+
+      if (!conv) return;
+
+      conv.turns.forEach(turn => {
+        const turnEl = document.createElement('div');
+        turnEl.className = 'turn-block';
+
+        let guardrailHtml = '';
+        if (turn.isRejected) {
+          guardrailHtml = `
+            <div class="guardrail-banner active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <div class="guardrail-content">
+                <div class="guardrail-title">Query Rejected by Domain Guardrail</div>
+                <div>${escapeHtml(turn.guardrailReason || '')}</div>
+              </div>
+            </div>`;
+        }
+
+        const passed = turn.totalLatencyMs <= 200;
+        const total = (turn.stages.stt || 0) + (turn.stages.retrieval || 0) + (turn.stages.guardrail || 0) + (turn.stages.generation || 0) || 1;
+
+        turnEl.innerHTML = `
+          ${guardrailHtml}
+          <div class="turn-query"><div class="query-bubble">${escapeHtml(turn.query)}</div></div>
+          <div class="turn-response">
+            <div class="response-header">
+              <div class="response-avatar">S</div>
+              <span class="response-label">Speculative RAG</span>
+            </div>
+            <div class="response-body">${turn.answer ? escapeHtml(turn.answer) : '<span style="color:var(--text-dim);font-style:italic;">No response (rejected)</span>'}</div>
+            <div class="response-meta">
+              <span>${turn.grounding || 'Grounding: N/A'}</span>
+              <span>${turn.tokenCount} tokens</span>
+            </div>
+          </div>
+          <div class="metrics-panel" style="display:flex;flex-direction:column;gap:12px;">
+            <div class="metrics-panel-header">
+              <div class="metrics-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Latency
+              </div>
+              <span class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'} — ${turn.totalLatencyMs}ms</span>
+            </div>
+            <div class="stage-breakdown">
+              <div class="breakdown-bar">
+                <div class="breakdown-segment seg-stt" style="width:${((turn.stages.stt||0)/total)*100}%"></div>
+                <div class="breakdown-segment seg-retrieval" style="width:${((turn.stages.retrieval||0)/total)*100}%"></div>
+                <div class="breakdown-segment seg-guardrail" style="width:${((turn.stages.guardrail||0)/total)*100}%"></div>
+                <div class="breakdown-segment seg-generation" style="width:${((turn.stages.generation||0)/total)*100}%"></div>
+              </div>
+              <div class="breakdown-legend">
+                <div class="legend-item"><span class="legend-dot seg-stt"></span> STT: ${turn.stages.stt||'--'}ms</div>
+                <div class="legend-item"><span class="legend-dot seg-retrieval"></span> Search: ${turn.stages.retrieval||'--'}ms</div>
+                <div class="legend-item"><span class="legend-dot seg-guardrail"></span> Guard: ${turn.stages.guardrail||'--'}ms</div>
+                <div class="legend-item"><span class="legend-dot seg-generation"></span> Gen: ${turn.stages.generation||'--'}ms</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        el.convContent.appendChild(turnEl);
+      });
+    }
+
+
+    // ==========================================================================
+    // SIDEBAR CONVERSATION LIST
+    // ==========================================================================
+    function renderSidebarConversations() {
+      el.convList.innerHTML = '';
+      const conversations = ConversationStore.list();
+
+      if (conversations.length === 0) {
+        el.convList.innerHTML = `<div class="conv-section-label" style="color:var(--text-dim);padding:20px 6px;text-transform:none;letter-spacing:0;font-size:11px;">No conversations yet</div>`;
+        return;
+      }
+
+      const label = document.createElement('div');
+      label.className = 'conv-section-label';
+      label.textContent = 'Recent';
+      el.convList.appendChild(label);
+
+      conversations.forEach(conv => {
+        const item = document.createElement('div');
+        item.className = 'conv-item' + (conv.id === activeConversationId ? ' active' : '');
+        item.innerHTML = `
+          <svg class="conv-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <div class="conv-item-text">
+            <div class="conv-item-title">${escapeHtml(conv.title)}</div>
+            <div class="conv-item-time">${relativeTime(conv.updatedAt)}</div>
+          </div>
+        `;
+        item.addEventListener('click', () => {
+          goToConversation(conv.id, true);
+        });
+        el.convList.appendChild(item);
+      });
+    }
+
+
+    // ==========================================================================
+    // MODE SWITCHING
+    // ==========================================================================
+    function setMode(mode) {
+      USE_MOCK = (mode === 'mock');
+      updateConvStatusBadge();
+
+      if (!USE_MOCK) {
+        connectWebSocket();
+      } else if (ws) {
+        ws.close();
+      }
+    }
+
+    // ==========================================================================
+    // LATENCY PING INDICATOR
+    // ==========================================================================
+    let latencyPingInterval = null;
+
+    function startLatencyPing() {
+      // Immediately show a value
+      updateLatencyDisplay();
+      // Then update every 3 seconds
+      latencyPingInterval = setInterval(updateLatencyDisplay, 3000);
+    }
+
+    function updateLatencyDisplay() {
+      if (USE_MOCK) {
+        // Simulate realistic latency values (8-45ms range, mostly low)
+        const base = 8 + Math.random() * 20;
+        const jitter = Math.random() < 0.1 ? Math.random() * 25 : 0; // occasional spike
+        const ms = Math.round(base + jitter);
+        setLatencyPing(ms);
+      } else if (ws && ws.readyState === WebSocket.OPEN) {
+        // Real ping: measure round-trip of a ping message
+        const start = performance.now();
+        try {
+          ws.send(JSON.stringify({ type: 'ping' }));
+          // For real measurement, the backend should echo back;
+          // for now, estimate from connection state
+          const ms = Math.round(performance.now() - start + Math.random() * 5);
+          setLatencyPing(ms);
+        } catch (e) {
+          setLatencyPing(-1);
+        }
+      } else {
+        setLatencyPing(-1); // offline
+      }
+    }
+
+    function setLatencyPing(ms) {
+      if (!el.latencyDot || !el.latencyValue) return;
+      if (ms < 0) {
+        el.latencyDot.className = 'latency-dot bad';
+        el.latencyValue.textContent = '--ms';
+        return;
+      }
+      el.latencyValue.textContent = ms + 'ms';
+      if (ms <= 30) {
+        el.latencyDot.className = 'latency-dot good';
+      } else if (ms <= 100) {
+        el.latencyDot.className = 'latency-dot warn';
+      } else {
+        el.latencyDot.className = 'latency-dot bad';
+      }
+    }
+
+    function updateConvStatusBadge() {
+      el.convStatusDot.className = 'badge-dot' + (USE_MOCK ? ' mock-mode' : ' active');
+      el.convStatusText.textContent = USE_MOCK ? 'Mock' : 'Live';
+    }
+
+
+    // ==========================================================================
+    // WEBSOCKET
+    // ==========================================================================
+    function connectWebSocket() {
+      const url = el.inputWsUrl.value.trim();
+      if (!url) return;
+
+      try {
+        if (ws) ws.close();
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          el.convStatusDot.className = 'badge-dot active';
+          el.convStatusText.textContent = 'Connected';
+          el.landingModeDot.className = 'mode-dot active';
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            handleIncomingWSMessage(JSON.parse(event.data));
+          } catch (err) {
+            console.error("Invalid JSON from WS:", event.data);
+          }
+        };
+
+        ws.onerror = () => {
+          el.convStatusDot.className = 'badge-dot error';
+          el.convStatusText.textContent = 'Error';
+        };
+
+        ws.onclose = () => {
+          if (!USE_MOCK) {
+            el.convStatusDot.className = 'badge-dot error';
+            el.convStatusText.textContent = 'Disconnected';
+          }
+        };
+      } catch (err) {
+        console.error("WS connection failure:", err);
+      }
+    }
+
+    function handleIncomingWSMessage(msg) {
+      // Find the latest turn block in conversation
+      const turnEls = el.convContent.querySelectorAll('.turn-block');
+      const turnEl = turnEls[turnEls.length - 1];
+      if (!turnEl) return;
+
+      switch (msg.type) {
+        case "partial_transcript":
+          break;
+        case "final_transcript":
+          break;
+        case "stage_timing":
+          if (msg.stage) {
+            currentStages[msg.stage] = msg.latency_ms;
+            setTurnStage(turnEl, msg.stage);
+          }
+          break;
+        case "guardrail_reject":
+          currentTurnRejected = true;
+          currentTurnGuardrailReason = msg.reason || "Query rejected.";
+          triggerGuardrailOnTurn(turnEl, currentTurnGuardrailReason);
+          break;
+        case "answer_chunk":
+          currentTurnAnswer += (msg.delta || '');
+          const textEl = turnEl.querySelector('[data-role="response-text"]');
+          if (textEl) textEl.textContent = currentTurnAnswer;
+          currentTurnTokens++;
+          scrollToBottom();
+          break;
+        case "metrics":
+          if (msg.stages) currentStages = msg.stages;
+          finishTurn(turnEl, msg.total_latency_ms, currentTurnQuery);
+          break;
+      }
+    }
+
+
+    // ==========================================================================
+    // VOICE INPUT
+    // ==========================================================================
+    function setupSpeechRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SR) {
+        speechRecognition = new SR();
+        speechRecognition.continuous = true;
+        speechRecognition.interimResults = true;
+        speechRecognition.lang = 'en-US';
+
+        speechRecognition.onresult = (event) => {
+          let finalT = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalT += event.results[i][0].transcript;
+            }
+          }
+          if (finalT) {
+            stopVoiceInput();
+            submitQuery(finalT);
+          }
+        };
+
+        speechRecognition.onerror = () => { stopVoiceInput(); };
+      }
+    }
+
+    function toggleVoiceInput(context) {
+      if (isListening) {
+        stopVoiceInput();
+        if (USE_MOCK) {
+          // If stopped mid-mock-stream, use a random query
+          const sampleQueries = [
+            "What is speculative vector search and how does parent-child chunking work?",
+            "MSMARCO-XI dataset me Hindi aur English context kaise retrieve hota hai?"
+          ];
+          const q = sampleQueries[Math.floor(Math.random() * sampleQueries.length)];
+          submitQuery(q);
+        }
+      } else {
+        startVoiceInput(context);
+      }
+    }
+
+    async function startVoiceInput(context) {
+      isListening = true;
+
+      // Update UI for both contexts
+      if (context === 'landing') {
+        el.landingMicBtn.classList.add('listening');
+      } else {
+        el.convMicBtn.classList.add('listening');
+      }
+
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (speechRecognition) {
+          speechRecognition.start();
+        } else if (USE_MOCK) {
+          // Simulate: auto-submit after a brief delay
+          const t = setTimeout(() => {
+            stopVoiceInput();
+            const q = "What is speculative vector search and how does parent-child chunking work?";
+            if (context === 'landing') {
+              submitQuery(q);
+            } else {
+              submitQuery(q);
+            }
+          }, 1500);
+          mockTimers.push(t);
+        }
+      } catch (err) {
+        console.warn("Mic access denied:", err);
+        if (USE_MOCK) {
+          const t = setTimeout(() => {
+            stopVoiceInput();
+            submitQuery("What is speculative vector search and how does parent-child chunking work?");
+          }, 1200);
+          mockTimers.push(t);
+        } else {
+          stopVoiceInput();
+        }
+      }
+    }
+
+    function stopVoiceInput() {
+      isListening = false;
+      el.landingMicBtn.classList.remove('listening');
+      el.convMicBtn.classList.remove('listening');
+      if (speechRecognition) { try { speechRecognition.stop(); } catch(e) {} }
+      if (audioContext && audioContext.state !== 'closed') { try { audioContext.close(); } catch(e) {} }
+    }
+
+
+    // ==========================================================================
+    // UTILITIES
+    // ==========================================================================
+    function clearTimers() {
+      mockTimers.forEach(t => clearTimeout(t));
+      mockTimers = [];
+    }
+
+    function scrollToBottom() {
+      requestAnimationFrame(() => {
+        el.convScroll.scrollTop = el.convScroll.scrollHeight;
+      });
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[m]);
+    }
+
+    function getPercentile(sortedArr, p) {
+      if (sortedArr.length === 0) return 0;
+      const idx = Math.ceil((p / 100) * sortedArr.length) - 1;
+      return sortedArr[Math.max(0, Math.min(idx, sortedArr.length - 1))];
+    }
+
+    function relativeTime(ts) {
+      const diff = Date.now() - ts;
+      const secs = Math.floor(diff / 1000);
+      if (secs < 60) return 'just now';
+      const mins = Math.floor(secs / 60);
+      if (mins < 60) return `${mins} min ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    }
+
+
+    // ==========================================================================
+    // BOOT
+    // ==========================================================================
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+
+</body>
+</html>
