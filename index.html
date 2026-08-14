@@ -589,47 +589,6 @@
       padding: 2px;
     }
 
-    /* Pipeline bar */
-    .pipeline-bar {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 8px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      overflow-x: auto;
-    }
-
-    .pipeline-step {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-
-    .pipeline-step.active { color: var(--accent); font-weight: 600; }
-    .pipeline-step.completed { color: var(--text-secondary); }
-
-    .pipeline-step-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--text-dim);
-    }
-
-    .pipeline-step.active .pipeline-step-dot {
-      background: var(--accent);
-      box-shadow: 0 0 6px var(--accent);
-    }
-
-    .pipeline-step.completed .pipeline-step-dot { background: var(--success); }
-    .pipeline-divider { color: var(--border); font-size: 12px; }
-
     /* Turn Block (Query + Response Pair) */
     .turn-block {
       display: flex;
@@ -715,143 +674,49 @@
       animation: blink 0.9s infinite;
     }
 
-    .response-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
+    /* Topbar latency badge */
+    .latency-badge {
       font-family: var(--font-mono);
-      color: var(--text-dim);
-      padding: 0 4px;
-    }
-
-    /* Metrics Panel (inside conversation, after response) */
-    .metrics-panel {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .metrics-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 10px;
-    }
-
-    .metrics-panel-title {
       font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-secondary);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .metrics-panel-title svg { width: 13px; height: 13px; }
-
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-    }
-
-    @media (max-width: 768px) {
-      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    .metric-card {
-      background: var(--bg-deep);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .metric-card.highlight {
-      border-color: var(--border);
-      background: var(--bg-surface-elevated);
-    }
-
-    .metric-label {
-      font-size: 10px;
       font-weight: 500;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .metric-value {
-      font-family: var(--font-mono);
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text-primary);
-      display: flex;
-      align-items: baseline;
-      gap: 3px;
-    }
-
-    .metric-unit {
-      font-size: 10px;
-      font-weight: 400;
-      color: var(--text-secondary);
-    }
-
-    .sla-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 9px;
-      font-weight: 700;
-      font-family: var(--font-mono);
-      padding: 2px 7px;
+      color: var(--text-muted);
+      padding: 2px 8px;
       border-radius: var(--radius-full);
-      width: fit-content;
-      margin-top: 3px;
+      background: transparent;
+      transition: color 0.2s ease;
+      white-space: nowrap;
     }
 
-    .sla-badge.pass { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
-    .sla-badge.fail { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
-    .sla-badge.idle { background: var(--bg-surface); color: var(--text-dim); border: 1px solid var(--border); }
+    .latency-badge.has-value { color: var(--text-secondary); }
 
-    /* Breakdown bar */
-    .stage-breakdown { display: flex; flex-direction: column; gap: 8px; }
-
-    .breakdown-bar {
-      height: 7px;
-      width: 100%;
-      background: var(--bg-surface-elevated);
-      border-radius: 4px;
+    /* TTS mute toggle */
+    .btn-tts-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
       display: flex;
-      overflow: hidden;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
     }
+    .btn-tts-toggle:hover { background: var(--bg-surface); color: var(--text-primary); }
+    .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
+    .btn-tts-toggle svg { width: 14px; height: 14px; }
 
-    .breakdown-segment { height: 100%; transition: width 0.3s ease; }
-    .seg-stt { background: #38bdf8; }
-    .seg-retrieval { background: #818cf8; }
-    .seg-guardrail { background: #fbbf24; }
-    .seg-generation { background: #34d399; }
-
-    .breakdown-legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      font-size: 10px;
-      font-family: var(--font-mono);
-      color: var(--text-secondary);
+    /* Mic listening pulse animation */
+    .conv-mic-btn.listening,
+    .pill-mic.listening {
+      animation: mic-pulse 1.2s ease-in-out infinite;
     }
-
-    .legend-item { display: flex; align-items: center; gap: 4px; }
-    .legend-dot { width: 7px; height: 7px; border-radius: 2px; }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+    }
 
     /* Bottom input bar (within conversation) */
     .conv-input-bar {
@@ -943,60 +808,6 @@
 
     .replay-indicator.active { display: block; }
 
-    /* History drawer inside metrics */
-    .history-drawer {
-      margin-top: 4px;
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 10px;
-    }
-
-    .history-toggle {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .history-toggle:hover { color: var(--text-primary); }
-
-    .history-list {
-      display: none;
-      flex-direction: column;
-      gap: 4px;
-      margin-top: 8px;
-      max-height: 140px;
-      overflow-y: auto;
-    }
-
-    .history-list.open { display: flex; }
-
-    .history-row {
-      display: grid;
-      grid-template-columns: auto 1fr auto auto;
-      gap: 10px;
-      font-size: 11px;
-      font-family: var(--font-mono);
-      padding: 5px 8px;
-      background: var(--bg-deep);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
-      align-items: center;
-    }
-
-    .history-row .query-snippet {
-      font-family: var(--font-sans);
-      color: var(--text-primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     /* Keyframes */
     @keyframes blink {
       0%, 100% { opacity: 1; }
@@ -1015,8 +826,6 @@
       .conv-content { padding: 16px 16px 80px; }
 
       .query-bubble { max-width: 90%; }
-
-      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
     @media (max-width: 480px) {
@@ -1098,6 +907,8 @@
           </div>
           <!-- Hidden WS URL input (configured via sidebar settings) -->
           <input type="hidden" id="input-ws-url" value="ws://localhost:8000/ws/audio">
+          <!-- Audio streaming controls -->
+          <input type="hidden" id="audio-streaming-active" value="false">
 
           <!-- Mic button -->
           <button class="pill-btn pill-mic" id="landing-mic-btn" title="Tap to speak">
@@ -1131,10 +942,17 @@
             <span class="conv-topbar-title" id="conv-topbar-title">New Conversation</span>
           </div>
           <div class="conv-topbar-right">
+            <span class="latency-badge" id="topbar-latency" title="Latest response latency"></span>
             <div class="badge-sm" id="conv-status-badge">
               <span class="badge-dot mock-mode" id="conv-status-dot"></span>
               <span id="conv-status-text">Mock</span>
             </div>
+            <button class="btn-tts-toggle" id="btn-tts-toggle" title="Toggle voice replies">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -1297,7 +1115,7 @@
     // ==========================================================================
     // GLOBAL STATE
     // ==========================================================================
-    let USE_MOCK = true;
+    let USE_MOCK = false;
     let ws = null;
     let isListening = false;
     let audioContext = null;
@@ -1356,11 +1174,46 @@
     // ==========================================================================
     // INITIALIZATION
     // ==========================================================================
+    let audioUnlocked = false;
+    function unlockAudioContext() {
+      if (audioUnlocked) return;
+      // Unlock Web Audio API
+      if (window.AudioContext || window.webkitAudioContext) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        if (source.start) source.start(0);
+        else source.noteOn(0);
+        setTimeout(() => { if(ctx.state !== 'closed') ctx.close(); }, 100);
+      }
+      
+      // Unlock HTML5 Audio
+      const audio = new Audio();
+      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+      audio.play().catch(() => {});
+      
+      audioUnlocked = true;
+      document.removeEventListener('click', unlockAudioContext);
+      document.removeEventListener('touchstart', unlockAudioContext);
+    }
+
     function init() {
       cacheElements();
       setupEventListeners();
       setupSpeechRecognition();
+      setupTtsToggle();
       renderSidebarConversations();
+
+      document.addEventListener('click', unlockAudioContext);
+      document.addEventListener('touchstart', unlockAudioContext);
+
+      // Auto-connect to backend WebSocket in live mode
+      if (!USE_MOCK) {
+        connectWebSocket();
+      }
+      updateConvStatusBadge();
     }
 
     function cacheElements() {
@@ -1391,6 +1244,7 @@
         convTextInput: document.getElementById('conv-text-input'),
         convMicBtn: document.getElementById('conv-mic-btn'),
         convSendBtn: document.getElementById('conv-send-btn'),
+        topbarLatency: document.getElementById('topbar-latency'),
       };
     }
 
@@ -1551,7 +1405,19 @@
       } else if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "text_query", text: queryText }));
       } else {
-        setResponseText(turnEl, 'WebSocket not connected. Enable Demo Mode or start the backend.');
+        // Try reconnecting once, then fall back to mock
+        console.warn('WebSocket not connected, attempting reconnect...');
+        connectWebSocket();
+        setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "text_query", text: queryText }));
+          } else {
+            console.warn('Reconnect failed, falling back to mock mode');
+            USE_MOCK = true;
+            updateConvStatusBadge();
+            executeMockPipeline(queryText, turnEl);
+          }
+        }, 1000);
       }
     }
 
@@ -1565,19 +1431,6 @@
       turnBlock.setAttribute('data-turn-id', Date.now());
 
       turnBlock.innerHTML = `
-        <!-- Pipeline Stage Bar -->
-        <nav class="pipeline-bar" aria-label="Pipeline Stage">
-          <div class="pipeline-step active" data-stage="idle"><div class="pipeline-step-dot"></div><span>1. Ready</span></div>
-          <div class="pipeline-divider">/</div>
-          <div class="pipeline-step" data-stage="stt"><div class="pipeline-step-dot"></div><span>2. STT</span></div>
-          <div class="pipeline-divider">/</div>
-          <div class="pipeline-step" data-stage="retrieval"><div class="pipeline-step-dot"></div><span>3. Search</span></div>
-          <div class="pipeline-divider">/</div>
-          <div class="pipeline-step" data-stage="guardrail"><div class="pipeline-step-dot"></div><span>4. Guard</span></div>
-          <div class="pipeline-divider">/</div>
-          <div class="pipeline-step" data-stage="generation"><div class="pipeline-step-dot"></div><span>5. Gen</span></div>
-        </nav>
-
         <!-- Guardrail banner -->
         <div class="guardrail-banner" data-role="guardrail">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1600,19 +1453,15 @@
           <div class="response-header">
             <div class="response-avatar">S</div>
             <span class="response-label">Speculative RAG</span>
+            <button class="btn-icon btn-replay-voice" title="Replay voice" data-role="replay-voice" style="display: none; margin-left: auto;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </button>
           </div>
           <div class="response-body" data-role="response-body">
             <span data-role="response-text"></span>
             <span class="answer-cursor" data-role="cursor"></span>
           </div>
-          <div class="response-meta">
-            <span data-role="grounding">Grounding: Processing...</span>
-            <span data-role="tokens">0 tokens</span>
-          </div>
         </div>
-
-        <!-- Metrics panel (hidden until complete) -->
-        <div class="metrics-panel" data-role="metrics" style="display: none;"></div>
       `;
 
       return turnBlock;
@@ -1708,7 +1557,6 @@
     // TURN COMPLETION — Save to store, render metrics
     // ==========================================================================
     function finishTurn(turnEl, totalLatencyMs, queryText) {
-      setTurnStage(turnEl, 'idle');
       const rounded = Math.round(totalLatencyMs * 10) / 10;
 
       // Record to global latency tracker
@@ -1738,8 +1586,20 @@
         if (conv) el.convTopbarTitle.textContent = conv.title;
       }
 
-      // Render inline metrics panel
-      renderTurnMetrics(turnEl, rounded, { ...currentStages });
+      // Update topbar latency badge
+      updateTopbarLatency(rounded);
+
+      // Show and hook up replay button
+      const replayBtn = turnEl.querySelector('[data-role="replay-voice"]');
+      if (replayBtn && !currentTurnRejected && currentTurnAnswer) {
+        replayBtn.style.display = 'flex';
+        replayBtn.onclick = () => speakResponse(currentTurnAnswer, true);
+      }
+
+      // TTS auto-play the response
+      if (!currentTurnRejected && currentTurnAnswer) {
+        speakResponse(currentTurnAnswer);
+      }
 
       // Update sidebar
       renderSidebarConversations();
@@ -1747,79 +1607,71 @@
 
 
     // ==========================================================================
-    // METRICS RENDERING (per-turn inline panel)
+    // TOPBAR LATENCY BADGE
     // ==========================================================================
-    function renderTurnMetrics(turnEl, latencyMs, stages) {
-      const panel = turnEl.querySelector('[data-role="metrics"]');
-      if (!panel) return;
+    function updateTopbarLatency(ms) {
+      const badge = document.getElementById('topbar-latency');
+      if (!badge) return;
+      badge.textContent = `⚡ ${Math.round(ms)}ms`;
+      badge.classList.add('has-value');
+    }
 
-      const passed = latencyMs <= 200;
-      const total = (stages.stt || 0) + (stages.retrieval || 0) + (stages.guardrail || 0) + (stages.generation || 0) || 1;
-      const pStt = ((stages.stt || 0) / total) * 100;
-      const pRet = ((stages.retrieval || 0) / total) * 100;
-      const pGr = ((stages.guardrail || 0) / total) * 100;
-      const pGen = ((stages.generation || 0) / total) * 100;
 
-      // Compute aggregate percentiles
-      const latencies = queryLatencyHistory.map(q => q.latency).sort((a, b) => a - b);
-      const p50 = getPercentile(latencies, 50);
-      const p70 = getPercentile(latencies, 70);
-      const p100 = latencies[latencies.length - 1] || 0;
-      const passedCount = queryLatencyHistory.filter(q => q.passed).length;
-      const compliance = queryLatencyHistory.length ? Math.round((passedCount / queryLatencyHistory.length) * 100) : 0;
+    // ==========================================================================
+    // TTS AUTO-PLAY
+    // ==========================================================================
+    let ttsEnabled = true;
+    let currentTtsAudio = null;
 
-      panel.style.display = 'flex';
-      panel.innerHTML = `
-        <div class="metrics-panel-header">
-          <div class="metrics-panel-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Latency Telemetry (SLA: 200ms)
-          </div>
-          <span class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'} — ${latencyMs}ms</span>
-        </div>
+    function setupTtsToggle() {
+      const btn = document.getElementById('btn-tts-toggle');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        ttsEnabled = !ttsEnabled;
+        btn.classList.toggle('muted', !ttsEnabled);
+        btn.title = ttsEnabled ? 'Voice replies ON (click to mute)' : 'Voice replies OFF (click to unmute)';
+        // Update icon
+        if (ttsEnabled) {
+          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+        } else {
+          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+        }
+        // Stop any playing audio
+        if (!ttsEnabled && currentTtsAudio) {
+          currentTtsAudio.pause();
+          currentTtsAudio = null;
+        }
+      });
+    }
 
-        <div class="metrics-grid">
-          <div class="metric-card highlight">
-            <span class="metric-label">Latest</span>
-            <div class="metric-value"><span>${latencyMs}</span><span class="metric-unit">ms</span></div>
-            <div class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? `< 200ms ✓` : `≥ 200ms ✗`}</div>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">P50</span>
-            <div class="metric-value"><span>${p50}</span><span class="metric-unit">ms</span></div>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">P70</span>
-            <div class="metric-value"><span>${p70}</span><span class="metric-unit">ms</span></div>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">P100</span>
-            <div class="metric-value"><span>${p100}</span><span class="metric-unit">ms</span></div>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">SLA %</span>
-            <div class="metric-value"><span>${compliance}</span><span class="metric-unit">%</span></div>
-            <span style="font-size:9px;color:var(--text-dim);">${queryLatencyHistory.length} queries</span>
-          </div>
-        </div>
-
-        <div class="stage-breakdown">
-          <div class="breakdown-bar">
-            <div class="breakdown-segment seg-stt" style="width:${pStt}%"></div>
-            <div class="breakdown-segment seg-retrieval" style="width:${pRet}%"></div>
-            <div class="breakdown-segment seg-guardrail" style="width:${pGr}%"></div>
-            <div class="breakdown-segment seg-generation" style="width:${pGen}%"></div>
-          </div>
-          <div class="breakdown-legend">
-            <div class="legend-item"><span class="legend-dot seg-stt"></span> STT: ${stages.stt || '--'}ms</div>
-            <div class="legend-item"><span class="legend-dot seg-retrieval"></span> Search: ${stages.retrieval || '--'}ms</div>
-            <div class="legend-item"><span class="legend-dot seg-guardrail"></span> Guard: ${stages.guardrail || '--'}ms</div>
-            <div class="legend-item"><span class="legend-dot seg-generation"></span> Gen: ${stages.generation || '--'}ms</div>
-          </div>
-        </div>
-      `;
-
-      scrollToBottom();
+    async function speakResponse(text, force = false) {
+      if ((!ttsEnabled && !force) || !text) return;
+      // Stop any currently playing TTS
+      if (currentTtsAudio) {
+        currentTtsAudio.pause();
+        currentTtsAudio = null;
+      }
+      try {
+        const resp = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.slice(0, 500) }),
+        });
+        if (!resp.ok) {
+          console.warn('TTS unavailable:', resp.status);
+          return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        currentTtsAudio = new Audio(url);
+        currentTtsAudio.onended = () => {
+          URL.revokeObjectURL(url);
+          currentTtsAudio = null;
+        };
+        await currentTtsAudio.play();
+      } catch (err) {
+        console.warn('TTS playback error:', err);
+      }
     }
 
 
@@ -1827,12 +1679,7 @@
     // TURN DOM HELPERS
     // ==========================================================================
     function setTurnStage(turnEl, stageKey) {
-      turnEl.querySelectorAll('.pipeline-step').forEach(step => {
-        step.classList.remove('active');
-        if (step.getAttribute('data-stage') === stageKey) {
-          step.classList.add('active');
-        }
-      });
+      // No-op: pipeline bar removed from UI
     }
 
     function setResponseText(turnEl, text) {
@@ -1877,9 +1724,6 @@
             </div>`;
         }
 
-        const passed = turn.totalLatencyMs <= 200;
-        const total = (turn.stages.stt || 0) + (turn.stages.retrieval || 0) + (turn.stages.guardrail || 0) + (turn.stages.generation || 0) || 1;
-
         turnEl.innerHTML = `
           ${guardrailHtml}
           <div class="turn-query"><div class="query-bubble">${escapeHtml(turn.query)}</div></div>
@@ -1887,39 +1731,23 @@
             <div class="response-header">
               <div class="response-avatar">S</div>
               <span class="response-label">Speculative RAG</span>
+              ${(!turn.isRejected && turn.answer) ? `
+                <button class="btn-icon btn-replay-voice" title="Replay voice" style="margin-left: auto; display: flex;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </button>
+              ` : ''}
             </div>
             <div class="response-body">${turn.answer ? escapeHtml(turn.answer) : '<span style="color:var(--text-dim);font-style:italic;">No response (rejected)</span>'}</div>
-            <div class="response-meta">
-              <span>${turn.grounding || 'Grounding: N/A'}</span>
-              <span>${turn.tokenCount} tokens</span>
-            </div>
-          </div>
-          <div class="metrics-panel" style="display:flex;flex-direction:column;gap:12px;">
-            <div class="metrics-panel-header">
-              <div class="metrics-panel-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Latency
-              </div>
-              <span class="sla-badge ${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'} — ${turn.totalLatencyMs}ms</span>
-            </div>
-            <div class="stage-breakdown">
-              <div class="breakdown-bar">
-                <div class="breakdown-segment seg-stt" style="width:${((turn.stages.stt||0)/total)*100}%"></div>
-                <div class="breakdown-segment seg-retrieval" style="width:${((turn.stages.retrieval||0)/total)*100}%"></div>
-                <div class="breakdown-segment seg-guardrail" style="width:${((turn.stages.guardrail||0)/total)*100}%"></div>
-                <div class="breakdown-segment seg-generation" style="width:${((turn.stages.generation||0)/total)*100}%"></div>
-              </div>
-              <div class="breakdown-legend">
-                <div class="legend-item"><span class="legend-dot seg-stt"></span> STT: ${turn.stages.stt||'--'}ms</div>
-                <div class="legend-item"><span class="legend-dot seg-retrieval"></span> Search: ${turn.stages.retrieval||'--'}ms</div>
-                <div class="legend-item"><span class="legend-dot seg-guardrail"></span> Guard: ${turn.stages.guardrail||'--'}ms</div>
-                <div class="legend-item"><span class="legend-dot seg-generation"></span> Gen: ${turn.stages.generation||'--'}ms</div>
-              </div>
-            </div>
           </div>
         `;
 
         el.convContent.appendChild(turnEl);
+        
+        // Hook up replay button in history view
+        const replayBtn = turnEl.querySelector('.btn-replay-voice');
+        if (replayBtn) {
+          replayBtn.onclick = () => speakResponse(turn.answer, true);
+        }
       });
     }
 
@@ -2046,9 +1874,13 @@
         ws = new WebSocket(url);
 
         ws.onopen = () => {
+          console.log('WebSocket connected to', url);
           el.convStatusDot.className = 'badge-dot active';
-          el.convStatusText.textContent = 'Connected';
-          el.landingModeDot.className = 'mode-dot active';
+          el.convStatusText.textContent = 'Live';
+          // Update latency dot on landing page
+          if (el.latencyDot) {
+            el.latencyDot.className = 'latency-dot good';
+          }
         };
 
         ws.onmessage = (event) => {
@@ -2059,19 +1891,31 @@
           }
         };
 
-        ws.onerror = () => {
+        ws.onerror = (err) => {
+          console.warn('WebSocket error:', err);
           el.convStatusDot.className = 'badge-dot error';
           el.convStatusText.textContent = 'Error';
         };
 
         ws.onclose = () => {
+          console.log('WebSocket disconnected');
           if (!USE_MOCK) {
             el.convStatusDot.className = 'badge-dot error';
             el.convStatusText.textContent = 'Disconnected';
+            // Auto-fallback to mock after 3 failed seconds
+            setTimeout(() => {
+              if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn('Auto-falling back to mock mode');
+                USE_MOCK = true;
+                updateConvStatusBadge();
+              }
+            }, 3000);
           }
         };
       } catch (err) {
         console.error("WS connection failure:", err);
+        USE_MOCK = true;
+        updateConvStatusBadge();
       }
     }
 
@@ -2082,10 +1926,25 @@
       if (!turnEl) return;
 
       switch (msg.type) {
-        case "partial_transcript":
+        case "partial_transcript": {
+          // Show partial transcript in the query bubble as it streams
+          const bubble = turnEl.querySelector('.query-bubble');
+          if (bubble && msg.text) {
+            bubble.innerHTML = escapeHtml(msg.text) + ' <span class="transcript-partial">…</span>';
+          }
+          // Also update the pipeline stage to STT
+          setTurnStage(turnEl, 'stt');
           break;
-        case "final_transcript":
+        }
+        case "final_transcript": {
+          // Finalize the query bubble text
+          const bubble = turnEl.querySelector('.query-bubble');
+          if (bubble && msg.text) {
+            bubble.textContent = msg.text;
+            currentTurnQuery = msg.text;
+          }
           break;
+        }
         case "stage_timing":
           if (msg.stage) {
             currentStages[msg.stage] = msg.latency_ms;
@@ -2096,17 +1955,45 @@
           currentTurnRejected = true;
           currentTurnGuardrailReason = msg.reason || "Query rejected.";
           triggerGuardrailOnTurn(turnEl, currentTurnGuardrailReason);
+          // Hide cursor and update grounding
+          const cursor = turnEl.querySelector('[data-role="cursor"]');
+          if (cursor) cursor.style.display = 'none';
+          setResponseText(turnEl, '');
+          turnEl.querySelector('[data-role="grounding"]').textContent = 'Grounding: Rejected';
           break;
         case "answer_chunk":
           currentTurnAnswer += (msg.delta || '');
           const textEl = turnEl.querySelector('[data-role="response-text"]');
           if (textEl) textEl.textContent = currentTurnAnswer;
           currentTurnTokens++;
+          turnEl.querySelector('[data-role="tokens"]').textContent = currentTurnTokens + ' tokens';
           scrollToBottom();
           break;
-        case "metrics":
+        case "metrics": {
+          // Hide the typing cursor
+          const cursorEl = turnEl.querySelector('[data-role="cursor"]');
+          if (cursorEl) cursorEl.style.display = 'none';
+          // Update grounding info
+          const groundingEl = turnEl.querySelector('[data-role="grounding"]');
+          if (groundingEl) {
+            if (msg.cache_hit) {
+              groundingEl.textContent = `Ring Buffer Cache Hit (Score: ${msg.cache_score || '—'})`;
+              currentTurnGrounding = groundingEl.textContent;
+            } else {
+              groundingEl.textContent = 'Retrieval API: goa2.onrender.com';
+              currentTurnGrounding = groundingEl.textContent;
+            }
+          }
           if (msg.stages) currentStages = msg.stages;
+          if (msg.tokens) currentTurnTokens = msg.tokens;
           finishTurn(turnEl, msg.total_latency_ms, currentTurnQuery);
+          break;
+        }
+        case "pong":
+          // Latency ping response — handled by latency indicator
+          break;
+        case "error":
+          console.warn('Server error:', msg.message);
           break;
       }
     }
@@ -2117,41 +2004,61 @@
     // ==========================================================================
     function setupSpeechRecognition() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SR) {
-        speechRecognition = new SR();
-        speechRecognition.continuous = true;
-        speechRecognition.interimResults = true;
-        speechRecognition.lang = 'en-US';
-
-        speechRecognition.onresult = (event) => {
-          let finalT = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalT += event.results[i][0].transcript;
-            }
-          }
-          if (finalT) {
-            stopVoiceInput();
-            submitQuery(finalT);
-          }
-        };
-
-        speechRecognition.onerror = () => { stopVoiceInput(); };
+      if (!SR) {
+        console.warn('SpeechRecognition API not available in this browser');
+        return;
       }
+      speechRecognition = new SR();
+      speechRecognition.continuous = false;
+      speechRecognition.interimResults = true;
+      speechRecognition.lang = 'en-US';
+
+      speechRecognition.onresult = (event) => {
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+        // Show interim text in the active input field
+        const inputEl = (appView === 'landing') ? el.landingInput : el.convTextInput;
+        if (interim) {
+          inputEl.value = interim;
+          inputEl.placeholder = 'Listening...';
+        }
+        if (final) {
+          inputEl.value = final;
+          stopVoiceInput();
+          submitQuery(final.trim());
+          inputEl.value = '';
+        }
+      };
+
+      speechRecognition.onerror = (event) => {
+        console.warn('Speech recognition error:', event.error);
+        stopVoiceInput();
+        if (event.error === 'not-allowed') {
+          const inputEl = (appView === 'landing') ? el.landingInput : el.convTextInput;
+          inputEl.placeholder = 'Mic permission denied. Type instead...';
+          setTimeout(() => { inputEl.placeholder = 'Ask your question...'; }, 3000);
+        }
+      };
+
+      speechRecognition.onend = () => {
+        // Auto-stop UI state when recognition ends naturally
+        if (isListening) {
+          stopVoiceInput();
+        }
+      };
     }
 
     function toggleVoiceInput(context) {
       if (isListening) {
         stopVoiceInput();
-        if (USE_MOCK) {
-          // If stopped mid-mock-stream, use a random query
-          const sampleQueries = [
-            "What is speculative vector search and how does parent-child chunking work?",
-            "MSMARCO-XI dataset me Hindi aur English context kaise retrieve hota hai?"
-          ];
-          const q = sampleQueries[Math.floor(Math.random() * sampleQueries.length)];
-          submitQuery(q);
-        }
       } else {
         startVoiceInput(context);
       }
@@ -2163,39 +2070,33 @@
       // Update UI for both contexts
       if (context === 'landing') {
         el.landingMicBtn.classList.add('listening');
+        el.landingInput.placeholder = 'Listening...';
       } else {
         el.convMicBtn.classList.add('listening');
+        el.convTextInput.placeholder = 'Listening...';
       }
 
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (speechRecognition) {
+      // Use browser SpeechRecognition API
+      if (speechRecognition) {
+        try {
           speechRecognition.start();
-        } else if (USE_MOCK) {
-          // Simulate: auto-submit after a brief delay
-          const t = setTimeout(() => {
-            stopVoiceInput();
-            const q = "What is speculative vector search and how does parent-child chunking work?";
-            if (context === 'landing') {
-              submitQuery(q);
-            } else {
-              submitQuery(q);
-            }
-          }, 1500);
-          mockTimers.push(t);
-        }
-      } catch (err) {
-        console.warn("Mic access denied:", err);
-        if (USE_MOCK) {
-          const t = setTimeout(() => {
-            stopVoiceInput();
-            submitQuery("What is speculative vector search and how does parent-child chunking work?");
-          }, 1200);
-          mockTimers.push(t);
-        } else {
+        } catch (err) {
+          console.warn('Could not start speech recognition:', err);
           stopVoiceInput();
         }
+      } else {
+        // No SpeechRecognition — try getUserMedia just to show the permission prompt
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(t => t.stop());
+          console.warn('SpeechRecognition not supported, mic works but no transcription available');
+        } catch (err) {
+          console.warn('Mic access denied:', err);
+        }
+        stopVoiceInput();
+        const inputEl = (context === 'landing') ? el.landingInput : el.convTextInput;
+        inputEl.placeholder = 'Speech recognition not supported. Type instead...';
+        setTimeout(() => { inputEl.placeholder = 'Ask your question...'; }, 3000);
       }
     }
 
@@ -2203,8 +2104,14 @@
       isListening = false;
       el.landingMicBtn.classList.remove('listening');
       el.convMicBtn.classList.remove('listening');
+      el.landingInput.placeholder = 'Ask your question...';
+      el.convTextInput.placeholder = 'Follow-up question...';
       if (speechRecognition) { try { speechRecognition.stop(); } catch(e) {} }
       if (audioContext && audioContext.state !== 'closed') { try { audioContext.close(); } catch(e) {} }
+      // Send audio_end to backend
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'audio_end' })); } catch(e) {}
+      }
     }
 
 

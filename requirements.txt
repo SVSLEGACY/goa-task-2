@@ -5,3 +5,7 @@ nltk
 fastapi
 uvicorn
 pydantic
+elevenlabs==2.63.0
+python-dotenv
+httpx
+websockets
