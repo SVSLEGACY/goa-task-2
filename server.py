@@ -46,8 +46,22 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# ElevenLabs API Key (optional — text-only mode if missing)
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()
+# ElevenLabs API Keys (supports multiple keys comma-separated for fallback loop)
+raw_keys = os.getenv("ELEVENLABS_API_KEY", "").strip()
+ELEVENLABS_API_KEYS = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
+CURRENT_KEY_INDEX = 0
+
+def get_elevenlabs_key():
+    return ELEVENLABS_API_KEYS[CURRENT_KEY_INDEX] if ELEVENLABS_API_KEYS else None
+
+def rotate_elevenlabs_key():
+    global CURRENT_KEY_INDEX
+    if len(ELEVENLABS_API_KEYS) > 1:
+        CURRENT_KEY_INDEX = (CURRENT_KEY_INDEX + 1) % len(ELEVENLABS_API_KEYS)
+        logger.warning(f"Rotated to ElevenLabs API Key #{CURRENT_KEY_INDEX + 1} / {len(ELEVENLABS_API_KEYS)}")
+
+# Maintain compatibility where it just checks if ANY key is configured
+ELEVENLABS_API_KEY = get_elevenlabs_key()
 
 # Guardrail blocked keywords (simple domain safety filter)
 # Pre-compiled regex patterns for zero-overhead matching
@@ -111,35 +125,59 @@ async def push_tts_audio_to_websocket(websocket: WebSocket, text: str):
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE_ID}/stream"
         
+        max_retries = max(1, len(ELEVENLABS_API_KEYS))
         audio_chunks = []
-        async with client.stream(
-            "POST",
-            url,
-            headers={
-                "xi-api-key": ELEVENLABS_API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            },
-            json={
-                "text": tts_text,
-                "model_id": "eleven_turbo_v2_5",
-                "voice_settings": {
-                    "stability": 0.3,
-                    "similarity_boost": 0.5,
-                    "speed": 1.15,  # Slightly faster speech
-                },
-            },
-            params={
-                "output_format": "mp3_22050_32",
-                "optimize_streaming_latency": "4",
-            },
-        ) as resp:
-            if resp.status_code != 200:
-                error_body = await resp.aread()
-                logger.error(f"TTS push error {resp.status_code}: {error_body[:200]}")
+        
+        for attempt in range(max_retries):
+            current_key = get_elevenlabs_key()
+            if not current_key:
                 return
-            async for chunk in resp.aiter_bytes(8192):
-                audio_chunks.append(chunk)
+
+            try:
+                async with client.stream(
+                    "POST",
+                    url,
+                    headers={
+                        "xi-api-key": current_key,
+                        "Content-Type": "application/json",
+                        "Accept": "audio/mpeg",
+                    },
+                    json={
+                        "text": tts_text,
+                        "model_id": "eleven_turbo_v2_5",
+                        "voice_settings": {
+                            "stability": 0.3,
+                            "similarity_boost": 0.5,
+                            "speed": 1.15,  # Slightly faster speech
+                        },
+                    },
+                    params={
+                        "output_format": "mp3_22050_32",
+                        "optimize_streaming_latency": "4",
+                    },
+                ) as resp:
+                    if resp.status_code in (401, 402, 429):
+                        error_body = await resp.aread()
+                        logger.warning(f"TTS API Key Failed (Status {resp.status_code}): {error_body[:200]}")
+                        rotate_elevenlabs_key()
+                        continue  # Retry with next key
+                    
+                    if resp.status_code != 200:
+                        error_body = await resp.aread()
+                        logger.error(f"TTS push error {resp.status_code}: {error_body[:200]}")
+                        return
+                        
+                    async for chunk in resp.aiter_bytes(8192):
+                        audio_chunks.append(chunk)
+                        
+                # Success, break retry loop
+                break
+            except Exception as e:
+                logger.error(f"TTS Stream Exception: {e}")
+                break
+
+        if not audio_chunks:
+            return
 
         # Combine all audio chunks and send as one base64 message
         full_audio = b"".join(audio_chunks)
@@ -575,7 +613,7 @@ async def health_check():
 # ElevenLabs TTS Proxy Endpoint (uses shared HTTP client)
 # ============================================================================
 from fastapi import Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 @app.post("/api/tts")
 async def tts_proxy(request: Request):
@@ -604,36 +642,57 @@ async def tts_proxy(request: Request):
         # Use shared global client with connection pooling
         client = await get_tts_client()
 
-        async def stream_audio():
-            url = f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE_ID}"
-            async with client.stream(
-                "POST",
-                url,
-                headers={
-                    "xi-api-key": ELEVENLABS_API_KEY,
-                    "Content-Type": "application/json",
-                    "Accept": "audio/mpeg",
-                },
-                json={
-                    "text": text,
-                    "model_id": "eleven_turbo_v2_5",
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.75,
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE_ID}"
+        
+        max_retries = max(1, len(ELEVENLABS_API_KEYS))
+        full_audio = None
+        
+        for attempt in range(max_retries):
+            current_key = get_elevenlabs_key()
+            if not current_key:
+                return JSONResponse({"error": "No ElevenLabs keys available"}, status_code=503)
+                
+            try:
+                resp = await client.post(
+                    url,
+                    headers={
+                        "xi-api-key": current_key,
+                        "Content-Type": "application/json",
+                        "Accept": "audio/mpeg",
                     },
-                },
-                params={
-                    "output_format": "mp3_44100_64",
-                },
-            ) as resp:
+                    json={
+                        "text": text,
+                        "model_id": "eleven_turbo_v2_5",
+                        "voice_settings": {
+                            "stability": 0.5,
+                            "similarity_boost": 0.75,
+                        },
+                    },
+                    params={
+                        "output_format": "mp3_44100_64",
+                    }
+                )
+                
+                if resp.status_code in (401, 402, 429):
+                    logger.warning(f"TTS Proxy Key Failed (Status {resp.status_code}): {resp.text[:200]}")
+                    rotate_elevenlabs_key()
+                    continue  # retry next key
+                    
                 if resp.status_code != 200:
-                    error_body = await resp.aread()
-                    logger.error(f"ElevenLabs TTS error {resp.status_code}: {error_body[:500]}")
-                    return
-                async for chunk in resp.aiter_bytes(4096):
-                    yield chunk
+                    logger.error(f"ElevenLabs TTS proxy error {resp.status_code}: {resp.text[:500]}")
+                    return JSONResponse({"error": "TTS generation failed"}, status_code=500)
+                    
+                full_audio = resp.content
+                break
+                
+            except Exception as e:
+                logger.error(f"TTS Proxy Stream Exception: {e}")
+                break
 
-        return StreamingResponse(stream_audio(), media_type="audio/mpeg")
+        if not full_audio:
+            return JSONResponse({"error": "TTS failed after retries"}, status_code=500)
+            
+        return Response(content=full_audio, media_type="audio/mpeg")
 
     except Exception as e:
         logger.error(f"TTS proxy error: {e}")
