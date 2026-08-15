@@ -1705,6 +1705,10 @@
       currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
       window._earlyTtsTriggered = false;  // Reset early TTS flag for new turn
 
+      // Instantly clear inputs for UI responsiveness
+      el.landingInput.value = '';
+      el.convTextInput.value = '';
+
       // Add turn DOM block
       const turnEl = createTurnDOM(queryText);
       el.convContent.appendChild(turnEl);
@@ -1912,6 +1916,13 @@
 
       // Update sidebar
       renderSidebarConversations();
+
+      // Refresh and focus the chatbox so the user can immediately talk again
+      el.landingInput.value = '';
+      el.convTextInput.value = '';
+      if (!isReplayMode) {
+        el.convTextInput.focus();
+      }
     }
 
 
