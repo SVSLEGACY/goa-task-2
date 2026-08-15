@@ -1560,21 +1560,21 @@
     // AUTO-DETECT BACKEND URL (Production vs Local)
     // ==========================================================================
     const LOCAL_BACKEND = 'ws://localhost:8000/ws/audio';
+    const RENDER_BACKEND = 'wss://goa2.onrender.com/ws/audio';
 
     function getBackendWsUrl() {
       // If user already set a custom URL in settings, use it
       const savedUrl = localStorage.getItem('custom_ws_url');
       if (savedUrl) return savedUrl;
 
-      // Always default to localhost — on production (Vercel), user must
-      // configure backend URL via Settings or it runs in mock mode
-      return LOCAL_BACKEND;
-    }
-
-    function isProductionWithoutBackend() {
+      // On localhost, use local backend
       const host = window.location.hostname;
-      const hasSavedUrl = !!localStorage.getItem('custom_ws_url');
-      return (host !== 'localhost' && host !== '127.0.0.1' && !hasSavedUrl);
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return LOCAL_BACKEND;
+      }
+      
+      // On production (Vercel), default to the Render brain
+      return RENDER_BACKEND;
     }
 
     let _wsReconnectAttempts = 0;
@@ -1596,16 +1596,9 @@
       el.inputWsUrl.value = backendUrl;
       console.log('Backend URL:', backendUrl);
 
-      // On production without custom backend, use mock mode (instant responses)
-      if (isProductionWithoutBackend()) {
-        USE_MOCK = true;
-        console.log('Production mode: no backend configured, using mock responses');
-      }
-
-      // Auto-connect to backend WebSocket in live mode
-      if (!USE_MOCK) {
-        connectWebSocket();
-      }
+      // We are connecting the real brain on production, no more forced mock mode
+      USE_MOCK = false;
+      connectWebSocket();
       updateConvStatusBadge();
     }
 
