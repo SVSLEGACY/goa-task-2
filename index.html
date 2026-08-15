@@ -1242,8 +1242,8 @@
             <span class="latency-dot good" id="latency-dot"></span>
             <span class="latency-value" id="latency-value">--ms</span>
           </div>
-          <!-- Hidden WS URL input (configured via sidebar settings) -->
-          <input type="hidden" id="input-ws-url" value="ws://localhost:8000/ws/audio">
+          <!-- Hidden WS URL input — auto-detects production vs local -->
+          <input type="hidden" id="input-ws-url" value="">
           <!-- Audio streaming controls -->
           <input type="hidden" id="audio-streaming-active" value="false">
 
@@ -1556,6 +1556,30 @@
       document.removeEventListener('touchstart', unlockAudioContext);
     }
 
+    // ==========================================================================
+    // AUTO-DETECT BACKEND URL (Production vs Local)
+    // ==========================================================================
+    const LOCAL_BACKEND = 'ws://localhost:8000/ws/audio';
+
+    function getBackendWsUrl() {
+      // If user already set a custom URL in settings, use it
+      const savedUrl = localStorage.getItem('custom_ws_url');
+      if (savedUrl) return savedUrl;
+
+      // Auto-detect: if running on Vercel (or any non-localhost), use same origin with wss://
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return LOCAL_BACKEND;
+      }
+      // Production: try same-origin WebSocket (works if backend is co-located)
+      // Otherwise user must configure via Settings
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${window.location.host}/ws/audio`;
+    }
+
+    let _wsReconnectAttempts = 0;
+    const _wsMaxReconnectDelay = 10000;
+
     function init() {
       cacheElements();
       setupEventListeners();
@@ -1566,6 +1590,11 @@
 
       document.addEventListener('click', unlockAudioContext);
       document.addEventListener('touchstart', unlockAudioContext);
+
+      // Set the auto-detected backend URL
+      const backendUrl = getBackendWsUrl();
+      el.inputWsUrl.value = backendUrl;
+      console.log('Backend URL:', backendUrl);
 
       // Auto-connect to backend WebSocket in live mode
       if (!USE_MOCK) {
@@ -1752,6 +1781,7 @@
       currentTurnGrounding = null;
       currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
       window._earlyTtsTriggered = false;  // Reset early TTS flag for new turn
+      window._ttsChunks = [];  // Reset streaming audio chunks
 
       // Instantly clear inputs for UI responsiveness
       el.landingInput.value = '';
@@ -2284,7 +2314,9 @@
       const newUrl = document.getElementById('setting-ws-url').value.trim();
       if (newUrl && newUrl !== currentUrl) {
         document.getElementById('input-ws-url').value = newUrl;
+        localStorage.setItem('custom_ws_url', newUrl);  // Persist for production
         console.log("WebSocket URL updated to", newUrl);
+        _wsReconnectAttempts = 0;  // Reset reconnect counter
         connectWebSocket();
       }
     }
@@ -2328,20 +2360,29 @@
     // ==========================================================================
     function connectWebSocket() {
       const url = el.inputWsUrl.value.trim();
-      if (!url) return;
+      if (!url) {
+        // Fallback: auto-detect if empty
+        el.inputWsUrl.value = getBackendWsUrl();
+        return connectWebSocket();
+      }
 
       try {
         if (ws) ws.close();
+        console.log('Connecting to WebSocket:', url);
+        el.convStatusDot.className = 'badge-dot mock-mode';
+        el.convStatusText.textContent = 'Connecting...';
         ws = new WebSocket(url);
 
         ws.onopen = () => {
           console.log('WebSocket connected to', url);
+          _wsReconnectAttempts = 0;  // Reset on successful connect
+          USE_MOCK = false;
           el.convStatusDot.className = 'badge-dot active';
           el.convStatusText.textContent = 'Live';
-          // Update latency dot on landing page
           if (el.latencyDot) {
             el.latencyDot.className = 'latency-dot good';
           }
+          updateConvStatusBadge();
         };
 
         ws.onmessage = (event) => {
@@ -2360,23 +2401,26 @@
 
         ws.onclose = () => {
           console.log('WebSocket disconnected');
-          if (!USE_MOCK) {
-            el.convStatusDot.className = 'badge-dot error';
-            el.convStatusText.textContent = 'Disconnected';
-            // Auto-fallback to mock after 3 failed seconds
-            setTimeout(() => {
-              if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.warn('Auto-falling back to mock mode');
-                USE_MOCK = true;
-                updateConvStatusBadge();
-              }
-            }, 3000);
+          el.convStatusDot.className = 'badge-dot error';
+          el.convStatusText.textContent = 'Reconnecting...';
+          if (el.latencyDot) {
+            el.latencyDot.className = 'latency-dot bad';
           }
+          
+          // Auto-reconnect with exponential backoff (NEVER give up on production)
+          _wsReconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(1.5, _wsReconnectAttempts - 1), _wsMaxReconnectDelay);
+          console.log(`Reconnecting in ${Math.round(delay)}ms (attempt ${_wsReconnectAttempts})...`);
+          setTimeout(() => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+              connectWebSocket();
+            }
+          }, delay);
         };
       } catch (err) {
         console.error("WS connection failure:", err);
-        USE_MOCK = true;
-        updateConvStatusBadge();
+        // Retry after delay
+        setTimeout(connectWebSocket, 2000);
       }
     }
 
@@ -2422,13 +2466,108 @@
           setResponseText(turnEl, '');
           turnEl.querySelector('[data-role="grounding"]').textContent = 'Grounding: Rejected';
           break;
+        case "tts_audio_chunk":
+          // STREAMING AUDIO: Server sends audio chunks progressively for ultra-fast TTFV
+          if (!currentTurnRejected && !window._earlyTtsTriggered) {
+            if (!window._ttsChunks) window._ttsChunks = [];
+            
+            if (msg.done) {
+              // All chunks received — assemble and play
+              if (window._ttsChunks.length > 0) {
+                window._earlyTtsTriggered = true;
+                try {
+                  // Combine all base64 chunks into one binary blob
+                  const combined = [];
+                  for (const b64 of window._ttsChunks) {
+                    const binaryStr = atob(b64);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                      bytes[i] = binaryStr.charCodeAt(i);
+                    }
+                    combined.push(bytes);
+                  }
+                  const totalLen = combined.reduce((sum, arr) => sum + arr.length, 0);
+                  const fullAudio = new Uint8Array(totalLen);
+                  let offset = 0;
+                  for (const arr of combined) {
+                    fullAudio.set(arr, offset);
+                    offset += arr.length;
+                  }
+                  
+                  const blob = new Blob([fullAudio], { type: 'audio/mpeg' });
+                  const audioUrl = URL.createObjectURL(blob);
+                  
+                  if (currentTtsAudio) {
+                    currentTtsAudio.pause();
+                    currentTtsAudio = null;
+                  }
+                  
+                  currentTtsAudio = new Audio(audioUrl);
+                  currentTtsAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentTtsAudio = null;
+                  };
+                  currentTtsAudio.play().catch(err => {
+                    console.warn('TTS autoplay blocked:', err);
+                  });
+                } catch (err) {
+                  console.warn('TTS streaming audio error:', err);
+                }
+              }
+              window._ttsChunks = [];
+            } else if (msg.audio_base64) {
+              // Accumulate chunk
+              window._ttsChunks.push(msg.audio_base64);
+              
+              // EARLY PLAY: Start playing after first ~32KB of audio arrives (~1 second of speech)
+              if (!window._earlyTtsTriggered && window._ttsChunks.length >= 2) {
+                window._earlyTtsTriggered = true;
+                try {
+                  const combined = [];
+                  for (const b64 of window._ttsChunks) {
+                    const binaryStr = atob(b64);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                      bytes[i] = binaryStr.charCodeAt(i);
+                    }
+                    combined.push(bytes);
+                  }
+                  const totalLen = combined.reduce((sum, arr) => sum + arr.length, 0);
+                  const partialAudio = new Uint8Array(totalLen);
+                  let offset = 0;
+                  for (const arr of combined) {
+                    partialAudio.set(arr, offset);
+                    offset += arr.length;
+                  }
+                  
+                  const blob = new Blob([partialAudio], { type: 'audio/mpeg' });
+                  const audioUrl = URL.createObjectURL(blob);
+                  
+                  if (currentTtsAudio) {
+                    currentTtsAudio.pause();
+                    currentTtsAudio = null;
+                  }
+                  
+                  currentTtsAudio = new Audio(audioUrl);
+                  currentTtsAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentTtsAudio = null;
+                  };
+                  currentTtsAudio.play().catch(err => {
+                    console.warn('TTS early play blocked:', err);
+                  });
+                } catch (err) {
+                  console.warn('TTS early play error:', err);
+                }
+              }
+            }
+          }
+          break;
         case "tts_server_audio":
-          // DIRECT AUDIO PLAYBACK: Server pushed audio via WebSocket — no HTTP round-trip!
-          // This message arrives BEFORE answer_chunk, so voice plays BEFORE text appears.
+          // LEGACY FALLBACK: Single-shot audio (for backward compatibility)
           if (!currentTurnRejected && msg.audio_base64 && !window._earlyTtsTriggered) {
             window._earlyTtsTriggered = true;
             try {
-              // Decode base64 to binary
               const binaryStr = atob(msg.audio_base64);
               const bytes = new Uint8Array(binaryStr.length);
               for (let i = 0; i < binaryStr.length; i++) {
@@ -2436,13 +2575,10 @@
               }
               const blob = new Blob([bytes], { type: msg.format || 'audio/mpeg' });
               const audioUrl = URL.createObjectURL(blob);
-              
-              // Stop any currently playing TTS
               if (currentTtsAudio) {
                 currentTtsAudio.pause();
                 currentTtsAudio = null;
               }
-              
               currentTtsAudio = new Audio(audioUrl);
               currentTtsAudio.onended = () => {
                 URL.revokeObjectURL(audioUrl);
@@ -2513,7 +2649,7 @@
     // ==========================================================================
     let _voiceFinalTranscript = '';
     let _voiceSilenceTimer = null;
-    const SILENCE_TIMEOUT_MS = 2500;  // Wait 2.5s of silence before submitting
+    const SILENCE_TIMEOUT_MS = 2000;  // Wait 2s of silence before submitting (faster for production)
     let _voiceContext = 'landing';
 
     function setupSpeechRecognition() {
@@ -2526,7 +2662,7 @@
       speechRecognition.continuous = true;          // KEEP listening — don't stop on pause
       speechRecognition.interimResults = true;       // Show partial words instantly
       speechRecognition.maxAlternatives = 1;
-      speechRecognition.lang = 'en-US';
+      speechRecognition.lang = 'hi-IN';  // Hindi-first for better Hinglish/Hindi recognition
 
       speechRecognition.onstart = () => {
         _voiceFinalTranscript = '';
