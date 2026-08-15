@@ -1863,60 +1863,58 @@
     // ==========================================================================
     // MOCK PIPELINE
     // ==========================================================================
-    function executeMockPipeline(query, turnEl) {
-      const queryLower = query.toLowerCase();
-      let match = MOCK_DATASET.find(item => item.trigger !== 'default' && queryLower.includes(item.trigger));
-      if (!match) match = MOCK_DATASET[3];
+    const RENDER_API = 'https://goa2.onrender.com/ask';
 
-      // Stage: STT
+    async function executeMockPipeline(query, turnEl) {
+      const startTime = performance.now();
+
+      // Stage: STT (instant, text already available)
       setTurnStage(turnEl, 'stt');
-      const sttLatency = match.stages.stt + (Math.random() * 8 - 4);
-      currentStages.stt = Math.max(25, Math.round(sttLatency));
+      currentStages.stt = 5;
 
-      // Stage: Retrieval
-      const t1 = setTimeout(() => {
-        setTurnStage(turnEl, 'retrieval');
-        const retLatency = match.stages.retrieval + (Math.random() * 6 - 3);
-        currentStages.retrieval = Math.max(20, Math.round(retLatency));
+      // Stage: Retrieval — call the REAL API
+      setTurnStage(turnEl, 'retrieval');
+      let answer = '';
+      try {
+        const resp = await fetch(RENDER_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query }),
+        });
+        if (resp.ok) {
+          answer = await resp.text();
+          answer = answer.trim();
+        } else {
+          answer = 'Sorry, I could not retrieve an answer right now. Please try again.';
+        }
+      } catch (err) {
+        console.error('Retrieval API error:', err);
+        answer = 'Connection to the knowledge base failed. Please check your internet connection.';
+      }
+      const retrievalTime = performance.now() - startTime;
+      currentStages.retrieval = Math.round(retrievalTime);
 
-        // Stage: Guardrail
-        const t2 = setTimeout(() => {
-          setTurnStage(turnEl, 'guardrail');
-          const grLatency = match.stages.guardrail + (Math.random() * 4 - 2);
-          currentStages.guardrail = Math.max(8, Math.round(grLatency));
+      // Stage: Guardrail (pass-through)
+      setTurnStage(turnEl, 'guardrail');
+      currentStages.guardrail = 5;
 
-          if (match.reject) {
-            currentTurnRejected = true;
-            currentTurnGuardrailReason = match.reason;
-            triggerGuardrailOnTurn(turnEl, match.reason);
-            setTurnStage(turnEl, 'idle');
-            setResponseText(turnEl, '');
-            const cursor = turnEl.querySelector('[data-role="cursor"]');
-            if (cursor) cursor.style.display = 'none';
-            const groundingEl = turnEl.querySelector('[data-role="grounding"]');
-            if (groundingEl) groundingEl.textContent = 'Grounding: Rejected';
-            const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail;
-            finishTurn(turnEl, total, query);
-            return;
-          }
+      // Stage: Generation — stream tokens
+      setTurnStage(turnEl, 'generation');
+      currentTurnGrounding = 'Qdrant: goa2.onrender.com (Live)';
+      const groundingEl = turnEl.querySelector('[data-role="grounding"]');
+      if (groundingEl) groundingEl.textContent = currentTurnGrounding;
 
-          // Stage: Generation
-          setTurnStage(turnEl, 'generation');
-          currentTurnGrounding = match.grounding;
-          const groundingEl = turnEl.querySelector('[data-role="grounding"]');
-          if (groundingEl) groundingEl.textContent = match.grounding;
+      streamMockTokens(turnEl, answer, Math.min(answer.length * 2, 400), () => {
+        const totalTime = performance.now() - startTime;
+        currentStages.generation = Math.round(totalTime - retrievalTime);
+        const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
+        finishTurn(turnEl, total, query);
 
-          streamMockTokens(turnEl, match.answer, match.stages.generation, () => {
-            const genLatency = match.stages.generation + (Math.random() * 8 - 4);
-            currentStages.generation = Math.max(40, Math.round(genLatency));
-            const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
-            finishTurn(turnEl, total, query);
-          });
-
-        }, match.stages.guardrail);
-        mockTimers.push(t2);
-      }, match.stages.retrieval + currentStages.stt);
-      mockTimers.push(t1);
+        // TTS: speak the answer
+        if (ttsEnabled && answer) {
+          speakResponse(answer);
+        }
+      });
     }
 
     function streamMockTokens(turnEl, fullText, targetDuration, onDone) {
@@ -2065,16 +2063,16 @@
         currentTtsAudio.pause();
         currentTtsAudio = null;
       }
+      // Try server TTS first, fallback to browser speechSynthesis
       try {
-        const resp = await fetch('/api/tts', {
+        const wsUrl = getBackendWsUrl();
+        const httpBase = wsUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws/audio', '');
+        const resp = await fetch(httpBase + '/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: text.slice(0, 500) }),
         });
-        if (!resp.ok) {
-          console.warn('TTS unavailable:', resp.status);
-          return;
-        }
+        if (!resp.ok) throw new Error('Server TTS unavailable');
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         currentTtsAudio = new Audio(url);
@@ -2084,7 +2082,16 @@
         };
         await currentTtsAudio.play();
       } catch (err) {
-        console.warn('TTS playback error:', err);
+        // Fallback: browser built-in speech synthesis
+        console.log('Using browser speech synthesis fallback');
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text.slice(0, 500));
+          utterance.lang = 'en-US';
+          utterance.rate = 1.1;
+          utterance.pitch = 1.0;
+          window.speechSynthesis.speak(utterance);
+        }
       }
     }
 
