@@ -1296,8 +1296,14 @@
     </div>
 
     <div class="settings-section-label">Background</div>
-    <div class="bg-picker-grid" id="bg-picker-grid">
+    <div class="bg-picker-grid" id="bg-picker-grid" style="margin-bottom: 24px;">
       <!-- Populated by JS -->
+    </div>
+
+    <div class="settings-section-label">Backend URL</div>
+    <div style="margin-bottom: 16px;">
+      <input type="text" id="setting-ws-url" class="pill-input" style="width: 100%; border: 1px solid rgba(255,255,255,0.1);" placeholder="wss://your-render-app.onrender.com/ws/audio">
+      <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px;">Restart connection after changing.</div>
     </div>
   </div>
 
@@ -2221,6 +2227,8 @@
       panel.classList.add('active');
       renderBackgroundPicker();
 
+      document.getElementById('setting-ws-url').value = document.getElementById('input-ws-url').value;
+
       // Close on overlay click
       overlay.onclick = closeSettings;
       document.getElementById('settings-close').onclick = closeSettings;
@@ -2229,6 +2237,14 @@
     function closeSettings() {
       document.getElementById('settings-overlay').classList.remove('active');
       document.getElementById('settings-panel').classList.remove('active');
+      
+      const currentUrl = document.getElementById('input-ws-url').value;
+      const newUrl = document.getElementById('setting-ws-url').value.trim();
+      if (newUrl && newUrl !== currentUrl) {
+        document.getElementById('input-ws-url').value = newUrl;
+        console.log("WebSocket URL updated to", newUrl);
+        connectWebSocket();
+      }
     }
 
     function renderBackgroundPicker() {
