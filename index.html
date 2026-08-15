@@ -1596,9 +1596,17 @@
       el.inputWsUrl.value = backendUrl;
       console.log('Backend URL:', backendUrl);
 
-      // We are connecting the real brain on production, no more forced mock mode
-      USE_MOCK = false;
-      connectWebSocket();
+      // If user has saved a custom backend URL, try connecting to it
+      // Otherwise on production, start in mock mode immediately (no WS server at Vercel)
+      const hasSavedUrl = !!localStorage.getItem('custom_ws_url');
+      const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+      if (isLocalhost || hasSavedUrl) {
+        USE_MOCK = false;
+        connectWebSocket();
+      } else {
+        USE_MOCK = true;
+        console.log('No custom backend URL — running in demo mode with mock responses');
+      }
       updateConvStatusBadge();
     }
 
@@ -2400,16 +2408,26 @@
 
         ws.onclose = () => {
           console.log('WebSocket disconnected');
-          el.convStatusDot.className = 'badge-dot error';
-          el.convStatusText.textContent = 'Reconnecting...';
-          if (el.latencyDot) {
-            el.latencyDot.className = 'latency-dot bad';
-          }
-          
-          // Auto-reconnect with exponential backoff (NEVER give up on production)
           _wsReconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(1.5, _wsReconnectAttempts - 1), _wsMaxReconnectDelay);
-          console.log(`Reconnecting in ${Math.round(delay)}ms (attempt ${_wsReconnectAttempts})...`);
+
+          // After 3 failed attempts, fall back to mock mode so app stays functional
+          if (_wsReconnectAttempts >= 3) {
+            console.warn('Backend unreachable after 3 attempts — switching to demo mode');
+            USE_MOCK = true;
+            ws = null;
+            el.convStatusDot.className = 'badge-dot mock-mode';
+            el.convStatusText.textContent = 'Demo Mode';
+            if (el.latencyDot) { el.latencyDot.className = 'latency-dot good'; }
+            updateConvStatusBadge();
+            return;
+          }
+
+          el.convStatusDot.className = 'badge-dot error';
+          el.convStatusText.textContent = `Reconnecting (${_wsReconnectAttempts}/3)...`;
+          if (el.latencyDot) { el.latencyDot.className = 'latency-dot bad'; }
+          
+          const delay = Math.min(1000 * Math.pow(2, _wsReconnectAttempts - 1), 4000);
+          console.log(`Reconnecting in ${Math.round(delay)}ms (attempt ${_wsReconnectAttempts}/3)...`);
           setTimeout(() => {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
               connectWebSocket();
@@ -2418,8 +2436,10 @@
         };
       } catch (err) {
         console.error("WS connection failure:", err);
-        // Retry after delay
-        setTimeout(connectWebSocket, 2000);
+        USE_MOCK = true;
+        el.convStatusDot.className = 'badge-dot mock-mode';
+        el.convStatusText.textContent = 'Demo Mode';
+        updateConvStatusBadge();
       }
     }
 
