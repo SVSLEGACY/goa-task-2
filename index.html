@@ -1939,7 +1939,7 @@
           textEl.textContent = currentTurnAnswer;
           idx++;
           currentTurnTokens = idx;
-          tokensLabel.textContent = `${idx} tokens`;
+          if (tokensLabel) tokensLabel.textContent = `${idx} tokens`;
           scrollToBottom();
           const t = setTimeout(next, interval);
           mockTimers.push(t);
