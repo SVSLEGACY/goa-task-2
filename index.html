@@ -1566,15 +1566,15 @@
       const savedUrl = localStorage.getItem('custom_ws_url');
       if (savedUrl) return savedUrl;
 
-      // Auto-detect: if running on Vercel (or any non-localhost), use same origin with wss://
+      // Always default to localhost — on production (Vercel), user must
+      // configure backend URL via Settings or it runs in mock mode
+      return LOCAL_BACKEND;
+    }
+
+    function isProductionWithoutBackend() {
       const host = window.location.hostname;
-      if (host === 'localhost' || host === '127.0.0.1') {
-        return LOCAL_BACKEND;
-      }
-      // Production: try same-origin WebSocket (works if backend is co-located)
-      // Otherwise user must configure via Settings
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${proto}//${window.location.host}/ws/audio`;
+      const hasSavedUrl = !!localStorage.getItem('custom_ws_url');
+      return (host !== 'localhost' && host !== '127.0.0.1' && !hasSavedUrl);
     }
 
     let _wsReconnectAttempts = 0;
@@ -1595,6 +1595,12 @@
       const backendUrl = getBackendWsUrl();
       el.inputWsUrl.value = backendUrl;
       console.log('Backend URL:', backendUrl);
+
+      // On production without custom backend, use mock mode (instant responses)
+      if (isProductionWithoutBackend()) {
+        USE_MOCK = true;
+        console.log('Production mode: no backend configured, using mock responses');
+      }
 
       // Auto-connect to backend WebSocket in live mode
       if (!USE_MOCK) {
@@ -2662,7 +2668,7 @@
       speechRecognition.continuous = true;          // KEEP listening — don't stop on pause
       speechRecognition.interimResults = true;       // Show partial words instantly
       speechRecognition.maxAlternatives = 1;
-      speechRecognition.lang = 'hi-IN';  // Hindi-first for better Hinglish/Hindi recognition
+      speechRecognition.lang = 'en-US';  // Default English, works for Hinglish too
 
       speechRecognition.onstart = () => {
         _voiceFinalTranscript = '';
