@@ -79,7 +79,11 @@ def build_index():
     points = []
     processed_rows = 0
     
-    print("Chunking and Embedding...")
+    # Collect all chunks first for batch encoding
+    all_chunks = []
+    all_metadata = []
+    
+    print("Collecting chunks...")
     for _, row in df.iterrows():
         if processed_rows >= MAX_ROWS:
             break
@@ -100,24 +104,32 @@ def build_index():
             child_chunks = chunk_text(parent_context)
             
             for chunk in child_chunks:
-                vector = model.encode(chunk).tolist()
-                payload = {
+                all_chunks.append(chunk)
+                all_metadata.append({
                     "passage_id": passage_id,
                     "language": lang,
                     "child_chunk": chunk,
                     "parent_context": parent_context
-                }
-                points.append(
-                    PointStruct(id=str(uuid.uuid4()), vector=vector, payload=payload)
-                )
+                })
                 
-        # Batch insert
+        processed_rows += 1
+
+    # Batch encode all chunks at once (10-50x faster than one-by-one)
+    print(f"Batch encoding {len(all_chunks)} chunks...")
+    all_vectors = model.encode(all_chunks, batch_size=64, show_progress_bar=True).tolist()
+    
+    # Create points
+    print("Creating index points...")
+    for i, (vector, metadata) in enumerate(zip(all_vectors, all_metadata)):
+        points.append(
+            PointStruct(id=str(uuid.uuid4()), vector=vector, payload=metadata)
+        )
+        
+        # Batch insert every 1000 points
         if len(points) >= 1000:
-            print(f"Inserting {len(points)} chunks. Processed {processed_rows} rows so far...")
+            print(f"Inserting {len(points)} chunks ({i+1}/{len(all_chunks)})...")
             client.upsert(collection_name=COLLECTION_NAME, points=points)
             points = []
-            
-        processed_rows += 1
 
     if points:
         print(f"Inserting final {len(points)} chunks.")

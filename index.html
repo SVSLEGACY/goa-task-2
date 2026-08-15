@@ -1703,6 +1703,7 @@
       currentTurnGuardrailReason = null;
       currentTurnGrounding = null;
       currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
+      window._earlyTtsTriggered = false;  // Reset early TTS flag for new turn
 
       // Add turn DOM block
       const turnEl = createTurnDOM(queryText);
@@ -1906,10 +1907,8 @@
         replayBtn.onclick = () => speakResponse(currentTurnAnswer, true);
       }
 
-      // TTS auto-play the response
-      if (!currentTurnRejected && currentTurnAnswer) {
-        speakResponse(currentTurnAnswer);
-      }
+      // Note: Auto-play is now handled exclusively by "tts_server_audio" WebSocket message
+      // No legacy speakResponse call here to prevent double-audio overlapping.
 
       // Update sidebar
       renderSidebarConversations();
@@ -1934,9 +1933,9 @@
         const p50 = Math.round(getPercentile(latencies, 50));
         const p70 = Math.round(getPercentile(latencies, 70));
         const p100 = Math.round(getPercentile(latencies, 100));
-        badge.textContent = `⚡ ${Math.round(ms)}ms  ·  P50: ${p50}ms  ·  P70: ${p70}ms  ·  P100: ${p100}ms`;
+        badge.textContent = `⚡ Local: ${Math.round(ms)}ms  ·  P50: ${p50}ms  ·  P70: ${p70}ms  ·  P100: ${p100}ms`;
       } else {
-        badge.textContent = `⚡ ${Math.round(ms)}ms`;
+        badge.textContent = `⚡ Local: ${Math.round(ms)}ms (network excluded)`;
       }
       badge.classList.add('has-value');
     }
@@ -2132,6 +2131,7 @@
     // LATENCY PING INDICATOR
     // ==========================================================================
     let latencyPingInterval = null;
+    let _pingStartTime = null;  // Track real ping start time
 
     function startLatencyPing() {
       // Immediately show a value
@@ -2148,14 +2148,11 @@
         const ms = Math.round(base + jitter);
         setLatencyPing(ms);
       } else if (ws && ws.readyState === WebSocket.OPEN) {
-        // Real ping: measure round-trip of a ping message
-        const start = performance.now();
+        // Real ping: measure actual round-trip via pong response
         try {
+          _pingStartTime = performance.now();
           ws.send(JSON.stringify({ type: 'ping' }));
-          // For real measurement, the backend should echo back;
-          // for now, estimate from connection state
-          const ms = Math.round(performance.now() - start + Math.random() * 5);
-          setLatencyPing(ms);
+          // RTT will be computed when "pong" is received in handleIncomingWSMessage
         } catch (e) {
           setLatencyPing(-1);
         }
@@ -2163,6 +2160,7 @@
         setLatencyPing(-1); // offline
       }
     }
+
 
     function setLatencyPing(ms) {
       if (!el.latencyDot || !el.latencyValue) return;
@@ -2355,6 +2353,47 @@
           setResponseText(turnEl, '');
           turnEl.querySelector('[data-role="grounding"]').textContent = 'Grounding: Rejected';
           break;
+        case "tts_server_audio":
+          // DIRECT AUDIO PLAYBACK: Server pushed audio via WebSocket — no HTTP round-trip!
+          // This message arrives BEFORE answer_chunk, so voice plays BEFORE text appears.
+          if (!currentTurnRejected && msg.audio_base64 && !window._earlyTtsTriggered) {
+            window._earlyTtsTriggered = true;
+            try {
+              // Decode base64 to binary
+              const binaryStr = atob(msg.audio_base64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: msg.format || 'audio/mpeg' });
+              const audioUrl = URL.createObjectURL(blob);
+              
+              // Stop any currently playing TTS
+              if (currentTtsAudio) {
+                currentTtsAudio.pause();
+                currentTtsAudio = null;
+              }
+              
+              currentTtsAudio = new Audio(audioUrl);
+              currentTtsAudio.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                currentTtsAudio = null;
+              };
+              currentTtsAudio.play().catch(err => {
+                console.warn('TTS autoplay blocked:', err);
+              });
+            } catch (err) {
+              console.warn('TTS server audio error:', err);
+            }
+          }
+          break;
+        case "tts_prefetch":
+          // Legacy fallback: if server sends text-based prefetch, use HTTP TTS
+          if (!currentTurnRejected && msg.text && !window._earlyTtsTriggered) {
+            window._earlyTtsTriggered = true;
+            speakResponse(msg.text);
+          }
+          break;
         case "answer_chunk":
           currentTurnAnswer += (msg.delta || '');
           const textEl = turnEl.querySelector('[data-role="response-text"]');
@@ -2380,11 +2419,18 @@
           }
           if (msg.stages) currentStages = msg.stages;
           if (msg.tokens) currentTurnTokens = msg.tokens;
-          finishTurn(turnEl, msg.total_latency_ms, currentTurnQuery);
+          // Use local_latency_ms (minus network) for display, fallback to total
+          const displayLatency = msg.local_latency_ms != null ? msg.local_latency_ms : msg.total_latency_ms;
+          finishTurn(turnEl, displayLatency, currentTurnQuery);
           break;
         }
         case "pong":
-          // Latency ping response — handled by latency indicator
+          // Real latency measurement: compute RTT from ping start time
+          if (_pingStartTime) {
+            const rtt = Math.round(performance.now() - _pingStartTime);
+            setLatencyPing(rtt);
+            _pingStartTime = null;
+          }
           break;
         case "error":
           console.warn('Server error:', msg.message);
@@ -2394,8 +2440,13 @@
 
 
     // ==========================================================================
-    // VOICE INPUT
+    // VOICE INPUT — Continuous listening with silence debounce
     // ==========================================================================
+    let _voiceFinalTranscript = '';
+    let _voiceSilenceTimer = null;
+    const SILENCE_TIMEOUT_MS = 2500;  // Wait 2.5s of silence before submitting
+    let _voiceContext = 'landing';
+
     function setupSpeechRecognition() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) {
@@ -2403,56 +2454,98 @@
         return;
       }
       speechRecognition = new SR();
-      speechRecognition.continuous = false;
-      speechRecognition.interimResults = true;
+      speechRecognition.continuous = true;          // KEEP listening — don't stop on pause
+      speechRecognition.interimResults = true;       // Show partial words instantly
+      speechRecognition.maxAlternatives = 1;
       speechRecognition.lang = 'en-US';
 
+      speechRecognition.onstart = () => {
+        _voiceFinalTranscript = '';
+        if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+      };
+
       speechRecognition.onresult = (event) => {
-        let interim = '';
-        let final = '';
+        // Clear any pending silence timer — user is still speaking
+        if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+
+        let interim_transcript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            final += transcript;
+            _voiceFinalTranscript += transcript;
           } else {
-            interim += transcript;
+            interim_transcript += transcript;
           }
         }
-        // Show interim text in the active input field
-        const inputEl = (appView === 'landing') ? el.landingInput : el.convTextInput;
-        if (interim) {
-          inputEl.value = interim;
-          inputEl.placeholder = 'Listening...';
-        }
-        if (final) {
-          inputEl.value = final;
-          stopVoiceInput();
-          submitQuery(final.trim());
-          inputEl.value = '';
+
+        // Show accumulated text in input box (final + interim combined)
+        const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+        inputEl.value = _voiceFinalTranscript + interim_transcript;
+
+        // Set silence debounce — if no new speech for 2.5s AND we have final text, submit
+        if (_voiceFinalTranscript.trim()) {
+          _voiceSilenceTimer = setTimeout(() => {
+            if (!isListening) return;
+            const fullText = _voiceFinalTranscript.trim();
+            if (fullText) {
+              stopVoiceInput();
+              const inputEl2 = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+              inputEl2.value = '';
+              submitQuery(fullText);
+            }
+          }, SILENCE_TIMEOUT_MS);
         }
       };
 
       speechRecognition.onerror = (event) => {
         console.warn('Speech recognition error:', event.error);
+        if (event.error === 'no-speech') {
+          // No speech detected — restart if still listening
+          if (isListening) {
+            try { speechRecognition.start(); } catch(e) {}
+          }
+          return;
+        }
         stopVoiceInput();
         if (event.error === 'not-allowed') {
-          const inputEl = (appView === 'landing') ? el.landingInput : el.convTextInput;
+          const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
           inputEl.placeholder = 'Mic permission denied. Type instead...';
           setTimeout(() => { inputEl.placeholder = 'Ask your question...'; }, 3000);
         }
       };
 
       speechRecognition.onend = () => {
-        // Auto-stop UI state when recognition ends naturally
+        // Browser may auto-stop after ~60s or on pause — AUTO-RESTART if user still listening
         if (isListening) {
-          stopVoiceInput();
+          try {
+            speechRecognition.start();
+          } catch (e) {
+            // Can't restart — submit what we have
+            if (_voiceFinalTranscript.trim()) {
+              const fullText = _voiceFinalTranscript.trim();
+              stopVoiceInput();
+              const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+              inputEl.value = '';
+              submitQuery(fullText);
+            } else {
+              stopVoiceInput();
+            }
+          }
         }
       };
     }
 
     function toggleVoiceInput(context) {
       if (isListening) {
+        // Manual stop — submit whatever we have accumulated
+        if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+        const fullText = _voiceFinalTranscript.trim();
         stopVoiceInput();
+        if (fullText) {
+          const inputEl = (context === 'landing') ? el.landingInput : el.convTextInput;
+          inputEl.value = '';
+          submitQuery(fullText);
+        }
       } else {
         startVoiceInput(context);
       }
@@ -2460,6 +2553,7 @@
 
     async function startVoiceInput(context) {
       isListening = true;
+      _voiceContext = context;  // Track which input field is active
 
       // Update UI for both contexts
       if (context === 'landing') {

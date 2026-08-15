@@ -7,6 +7,8 @@ This module provides the core classes for:
 - ContextRingBuffer: Fixed-size ring buffer for speculative result caching
 - LatencyTracker: Records end-to-end latency metrics with P50/P70/P100
 - SpeculativeSearchManager: Coordinates speculative search triggers and verification
+
+Optimized: HTTP/2 connection pooling, reduced timeouts, aggressive speculative triggers.
 """
 
 import asyncio
@@ -24,11 +26,20 @@ RETRIEVAL_API_URL = "https://goa2.onrender.com/ask"
 class Member2RetrievalClient:
     """
     Client for Member 2's Retrieval API (https://goa2.onrender.com/ask).
+    
+    Optimized: HTTP/2 enabled, connection pooling, reduced timeout for fast failure.
     """
 
     def __init__(self, endpoint_url: str = RETRIEVAL_API_URL):
         self.endpoint_url = endpoint_url
-        self.client = httpx.AsyncClient(timeout=15.0)
+        self.client = httpx.AsyncClient(
+            timeout=8.0,  # Reduced from 15s — fail fast on slow responses
+            http2=True,   # HTTP/2 multiplexing for connection reuse
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+            ),
+        )
 
     async def retrieve(self, query: str) -> str:
         """
@@ -202,6 +213,8 @@ class SpeculativeSearchManager:
     """
     Coordinates partial transcript speculative triggers, ring buffer context storage,
     and final query verification with Member 2's Retrieval API.
+    
+    Optimized: lower trigger threshold (3 words, 2-word gap) for earlier speculative search.
     """
 
     def __init__(self, retrieval_client: Member2RetrievalClient, tracker: LatencyTracker):
@@ -231,9 +244,10 @@ class SpeculativeSearchManager:
         words = [w for w in partial_text.strip().split() if w]
         num_words = len(words)
 
-        # Trigger speculative search every time partial transcript reaches >= 4 words and gains ~3-4 new words
-        if num_words >= 4:
-            if self.last_triggered_word_count == 0 or (num_words - self.last_triggered_word_count) >= 3:
+        # Optimized: Trigger speculative search at >= 3 words with 2-word gap
+        # (was: >= 4 words with 3-word gap) — starts retrieval sooner while user speaks
+        if num_words >= 3:
+            if self.last_triggered_word_count == 0 or (num_words - self.last_triggered_word_count) >= 2:
                 self.last_triggered_word_count = num_words
                 self.search_counter += 1
                 search_id = self.search_counter
