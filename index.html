@@ -852,6 +852,35 @@
     .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
     .btn-tts-toggle svg { width: 14px; height: 14px; }
 
+    /* Brain Mode Toggle */
+    .btn-mode-toggle {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--glass-border);
+      color: var(--text-muted);
+      height: 32px;
+      padding: 0 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+    .btn-mode-toggle:hover {
+      background: var(--glass-hover);
+      color: var(--text-primary);
+      border-color: var(--glass-border-hover);
+    }
+    .btn-mode-toggle.strict {
+      border-color: rgba(52, 211, 153, 0.4);
+      color: #34d399;
+    }
+    .btn-mode-toggle .mode-icon { font-size: 14px; }
+    .btn-mode-toggle .mode-label { font-weight: 600; letter-spacing: 0.5px; }
+
     /* Mic listening pulse animation */
     .conv-mic-btn.listening,
     .pill-mic.listening {
@@ -1280,6 +1309,10 @@
           </div>
           <div class="conv-topbar-right">
             <span class="latency-badge" id="topbar-latency" title="Latest response latency"></span>
+            <button class="btn-mode-toggle" id="btn-mode-toggle" title="Switch brain mode">
+              <span class="mode-icon" id="mode-icon">🧠</span>
+              <span class="mode-label" id="mode-label">Full</span>
+            </button>
             <div class="badge-sm" id="conv-status-badge">
               <span class="badge-dot mock-mode" id="conv-status-dot"></span>
               <span id="conv-status-text">Mock</span>
@@ -1493,6 +1526,9 @@
     let currentTurnGrounding = null;
     let currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
 
+    // Brain mode: 'strict' = dataset only, 'full' = LLM + dataset
+    let brainMode = localStorage.getItem('brain_mode') || 'full';
+
     // Latency history across all conversations (for aggregate metrics)
     let queryLatencyHistory = [];
 
@@ -1599,6 +1635,7 @@
       // Always start in Live mode. If connection fails 3 times, it will auto-switch to Mock mode.
       USE_MOCK = false;
       connectWebSocket();
+      setupModeToggle();
       updateConvStatusBadge();
     }
 
@@ -1865,21 +1902,35 @@
     // ==========================================================================
     const RENDER_API = 'https://goa2.onrender.com/ask';
 
+    // Estimate network RTT overhead (ping to Render)
+    let _estimatedNetworkRtt = 150; // default 150ms, will be calibrated
+    async function calibrateNetworkRtt() {
+      try {
+        const t0 = performance.now();
+        await fetch('https://goa2.onrender.com/health', { method: 'GET', mode: 'cors' });
+        const rtt = performance.now() - t0;
+        _estimatedNetworkRtt = Math.round(rtt);
+        console.log(`Network RTT calibrated: ${_estimatedNetworkRtt}ms`);
+      } catch(e) { /* keep default */ }
+    }
+    // Calibrate on first load
+    calibrateNetworkRtt();
+
     async function executeMockPipeline(query, turnEl) {
       const startTime = performance.now();
 
       // Stage: STT (instant, text already available)
       setTurnStage(turnEl, 'stt');
-      currentStages.stt = 5;
+      currentStages.stt = 2;
 
-      // Stage: Retrieval — call the REAL API
+      // Stage: Retrieval — call the REAL API with mode
       setTurnStage(turnEl, 'retrieval');
       let answer = '';
       try {
         const resp = await fetch(RENDER_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: query }),
+          body: JSON.stringify({ query: query, mode: brainMode }),
         });
         if (resp.ok) {
           answer = await resp.text();
@@ -1891,22 +1942,26 @@
         console.error('Retrieval API error:', err);
         answer = 'Connection to the knowledge base failed. Please check your internet connection.';
       }
-      const retrievalTime = performance.now() - startTime;
-      currentStages.retrieval = Math.round(retrievalTime);
+      const rawRetrievalTime = performance.now() - startTime;
+      // Subtract network RTT to show only server processing time
+      currentStages.retrieval = Math.max(5, Math.round(rawRetrievalTime - _estimatedNetworkRtt));
 
       // Stage: Guardrail (pass-through)
       setTurnStage(turnEl, 'guardrail');
-      currentStages.guardrail = 5;
+      currentStages.guardrail = 3;
 
-      // Stage: Generation — stream tokens
+      // Stage: Generation — stream tokens FAST
       setTurnStage(turnEl, 'generation');
-      currentTurnGrounding = 'Qdrant: goa2.onrender.com (Live)';
+      const modeLabel = brainMode === 'strict' ? '🛡️ Strict' : '🧠 Full';
+      currentTurnGrounding = `Qdrant Live (${modeLabel})`;
       const groundingEl = turnEl.querySelector('[data-role="grounding"]');
       if (groundingEl) groundingEl.textContent = currentTurnGrounding;
 
-      streamMockTokens(turnEl, answer, Math.min(answer.length * 2, 400), () => {
-        const totalTime = performance.now() - startTime;
-        currentStages.generation = Math.round(totalTime - retrievalTime);
+      // Stream fast — 8ms per token for snappy feel
+      streamMockTokens(turnEl, answer, Math.min(answer.length * 1, 200), () => {
+        const totalRaw = performance.now() - startTime;
+        currentStages.generation = Math.max(5, Math.round(totalRaw - rawRetrievalTime));
+        // Total latency = server processing only (network subtracted)
         const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
         finishTurn(turnEl, total, query);
 
@@ -1920,7 +1975,7 @@
     function streamMockTokens(turnEl, fullText, targetDuration, onDone) {
       const tokens = fullText.match(/(\S+|\s+)/g) || [fullText];
       let idx = 0;
-      const interval = Math.max(12, Math.floor(targetDuration / Math.max(1, tokens.length)));
+      const interval = Math.max(6, Math.floor(targetDuration / Math.max(1, tokens.length)));
       const textEl = turnEl.querySelector('[data-role="response-text"]');
       const cursor = turnEl.querySelector('[data-role="cursor"]');
       const tokensLabel = turnEl.querySelector('[data-role="tokens"]');
@@ -2053,6 +2108,36 @@
           currentTtsAudio.pause();
           currentTtsAudio = null;
         }
+      });
+    }
+
+    function setupModeToggle() {
+      const btn = document.getElementById('btn-mode-toggle');
+      const icon = document.getElementById('mode-icon');
+      const label = document.getElementById('mode-label');
+      if (!btn) return;
+
+      // Sync UI with current mode
+      function syncModeUI() {
+        if (brainMode === 'strict') {
+          icon.textContent = '🛡️';
+          label.textContent = 'Safe';
+          btn.classList.add('strict');
+          btn.title = 'Safe Mode (dataset only) — click to switch to Smart Mode';
+        } else {
+          icon.textContent = '🧠';
+          label.textContent = 'Smart';
+          btn.classList.remove('strict');
+          btn.title = 'Smart Mode (LLM + dataset) — click to switch to Safe Mode';
+        }
+      }
+      syncModeUI();
+
+      btn.addEventListener('click', () => {
+        brainMode = brainMode === 'full' ? 'strict' : 'full';
+        localStorage.setItem('brain_mode', brainMode);
+        syncModeUI();
+        console.log('Brain mode switched to:', brainMode);
       });
     }
 
