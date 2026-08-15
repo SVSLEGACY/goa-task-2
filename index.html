@@ -383,6 +383,38 @@
       text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
     }
 
+    .crew-roller {
+      display: inline-block;
+      overflow: hidden;
+      vertical-align: bottom;
+      height: 1.2em;
+      position: relative;
+      min-width: 180px;
+      text-align: left;
+    }
+    #crew-name {
+      display: inline-block;
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: #fff; /* Highlight color */
+      font-weight: 400;
+      transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.6s ease-in-out;
+    }
+    #crew-name.roll-out {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    #crew-name.roll-in {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    #crew-name.roll-prepare {
+      transform: translateY(100%);
+      opacity: 0;
+      transition: none;
+    }
+
     /* --- Pill Input Bar (Landing) — Floating glass pill with enhanced glow --- */
     .landing-pill {
       width: 100%;
@@ -1183,7 +1215,7 @@
 
       <!-- ===== LANDING SCREEN ===== -->
       <div class="landing-screen" id="landing-screen">
-        <h1 class="greeting-text" id="greeting-text">Let's jump in, Soham</h1>
+        <h1 class="greeting-text" id="greeting-text">Let's jump in, <span class="crew-roller"><span id="crew-name" class="roll-in">Straw Hats</span></span></h1>
 
         <div class="landing-pill" id="landing-pill">
           <!-- Plus / attach button -->
@@ -1520,6 +1552,7 @@
       setupEventListeners();
       setupSpeechRecognition();
       setupTtsToggle();
+      startCrewRoller();
       renderSidebarConversations();
 
       document.addEventListener('click', unlockAudioContext);
@@ -2665,6 +2698,35 @@
       const hrs = Math.floor(mins / 60);
       if (hrs < 24) return `${hrs}h ago`;
       return `${Math.floor(hrs / 24)}d ago`;
+    }
+
+    // ==========================================================================
+    // CREW ROLLER (ONE PIECE)
+    // ==========================================================================
+    function startCrewRoller() {
+      const crew = ["Straw Hats", "Luffy", "Zoro", "Nami", "Usopp", "Sanji", "Chopper", "Robin", "Franky", "Brook", "Jinbe"];
+      let crewIndex = 0;
+      const crewEl = document.getElementById('crew-name');
+      
+      if (!crewEl) return;
+
+      setInterval(() => {
+        // Roll out current name upwards
+        crewEl.classList.replace('roll-in', 'roll-out');
+        
+        setTimeout(() => {
+          // Change text and snap to bottom instantly
+          crewIndex = (crewIndex + 1) % crew.length;
+          crewEl.textContent = crew[crewIndex];
+          crewEl.classList.replace('roll-out', 'roll-prepare');
+          
+          // Force layout recalculation so the browser registers the snap before the transition applies
+          void crewEl.offsetWidth; 
+
+          // Roll in new name upwards
+          crewEl.classList.replace('roll-prepare', 'roll-in');
+        }, 600); // Wait for CSS transition (0.6s) to finish
+      }, 3000); // Rotate every 3 seconds
     }
 
 
