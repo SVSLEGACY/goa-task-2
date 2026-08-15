@@ -1960,8 +1960,13 @@
       // Stream fast — 8ms per token for snappy feel
       streamMockTokens(turnEl, answer, Math.min(answer.length * 1, 200), () => {
         const totalRaw = performance.now() - startTime;
-        currentStages.generation = Math.max(5, Math.round(totalRaw - rawRetrievalTime));
-        // Total latency = server processing only (network subtracted)
+        
+        // Only subtract the network RTT from the total time, keep the rest intact
+        const netLatency = Math.max(10, Math.round(totalRaw - _estimatedNetworkRtt));
+        
+        // Distribute the netLatency across the stages for the UI
+        currentStages.generation = Math.max(5, netLatency - currentStages.stt - currentStages.retrieval - currentStages.guardrail);
+        
         const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
         finishTurn(turnEl, total, query);
 
