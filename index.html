@@ -1596,17 +1596,9 @@
       el.inputWsUrl.value = backendUrl;
       console.log('Backend URL:', backendUrl);
 
-      // If user has saved a custom backend URL, try connecting to it
-      // Otherwise on production, start in mock mode immediately (no WS server at Vercel)
-      const hasSavedUrl = !!localStorage.getItem('custom_ws_url');
-      const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-      if (isLocalhost || hasSavedUrl) {
-        USE_MOCK = false;
-        connectWebSocket();
-      } else {
-        USE_MOCK = true;
-        console.log('No custom backend URL — running in demo mode with mock responses');
-      }
+      // Always start in Live mode. If connection fails 3 times, it will auto-switch to Mock mode.
+      USE_MOCK = false;
+      connectWebSocket();
       updateConvStatusBadge();
     }
 
@@ -1901,7 +1893,8 @@
             setResponseText(turnEl, '');
             const cursor = turnEl.querySelector('[data-role="cursor"]');
             if (cursor) cursor.style.display = 'none';
-            turnEl.querySelector('[data-role="grounding"]').textContent = 'Grounding: Rejected';
+            const groundingEl = turnEl.querySelector('[data-role="grounding"]');
+            if (groundingEl) groundingEl.textContent = 'Grounding: Rejected';
             const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail;
             finishTurn(turnEl, total, query);
             return;
@@ -1910,7 +1903,8 @@
           // Stage: Generation
           setTurnStage(turnEl, 'generation');
           currentTurnGrounding = match.grounding;
-          turnEl.querySelector('[data-role="grounding"]').textContent = match.grounding;
+          const groundingEl = turnEl.querySelector('[data-role="grounding"]');
+          if (groundingEl) groundingEl.textContent = match.grounding;
 
           streamMockTokens(turnEl, match.answer, match.stages.generation, () => {
             const genLatency = match.stages.generation + (Math.random() * 8 - 4);
