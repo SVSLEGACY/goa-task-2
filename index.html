@@ -1928,11 +1928,11 @@
       let answer = '';
       // Show loading indicator
       const textEl = turnEl.querySelector('[data-role="response-text"]');
-      if (textEl) textEl.textContent = '🧠 Waking up knowledge base (this may take 30s if asleep)...';
+      if (textEl) textEl.textContent = '⏳ Thinking...';
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
         const resp = await fetch(RENDER_API, {
           method: 'POST',
@@ -1943,27 +1943,61 @@
         clearTimeout(timeoutId);
 
         if (resp.ok) {
-          const rawText = await resp.text();
-          const trimmed = rawText.trim();
-          try {
-            const json = JSON.parse(trimmed);
-            answer = json.answer || json.response || json.text || json.result || json.output || trimmed;
-          } catch (e) {
-            answer = trimmed;
+          // API returns text/event-stream — read it as a stream
+          const contentType = resp.headers.get('content-type') || '';
+          if (contentType.includes('event-stream') || contentType.includes('stream')) {
+            // Read SSE / chunked streaming response
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulated = '';
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const chunk = decoder.decode(value, { stream: true });
+              // SSE lines look like: data: {"text":"hello"} or data: hello
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const payload = line.slice(6).trim();
+                  if (payload === '[DONE]') break;
+                  try {
+                    const j = JSON.parse(payload);
+                    accumulated += j.text || j.answer || j.content || j.delta || payload;
+                  } catch {
+                    if (payload) accumulated += payload;
+                  }
+                } else if (line.trim() && !line.startsWith(':')) {
+                  // Plain streamed text (no SSE prefix)
+                  accumulated += line;
+                }
+              }
+            }
+            answer = accumulated.trim();
+          } else {
+            // Regular JSON or plain text
+            const rawText = await resp.text();
+            const trimmed = rawText.trim();
+            try {
+              const json = JSON.parse(trimmed);
+              answer = json.answer || json.response || json.text || json.result || json.output || trimmed;
+            } catch {
+              answer = trimmed;
+            }
           }
         } else {
-          answer = 'Sorry, I could not retrieve an answer right now. Please try again.';
+          const errText = await resp.text().catch(() => '');
+          answer = `Sorry, I could not retrieve an answer (${resp.status}). ${errText.slice(0, 100)}`;
         }
       } catch (err) {
         if (err.name === 'AbortError') {
-          answer = '⚠️ The Render server is currently asleep and taking too long to wake up. Please wait 30 seconds and try your message again!';
+          answer = '⚠️ Request timed out after 30 seconds. Please try again!';
         } else {
           console.error('Retrieval API error:', err);
-          answer = 'Connection to the knowledge base failed. Please check your internet connection.';
+          answer = `Connection error: ${err.message}. Please check your internet connection.`;
         }
       }
 
-      // Clear the loading message before streaming
+      // Clear loading message before streaming
       if (textEl) textEl.textContent = '';
       const rawRetrievalTime = performance.now() - startTime;
       // Subtract network RTT to show only server processing time
