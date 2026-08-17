@@ -1637,8 +1637,7 @@
       connectWebSocket();
       setupModeToggle();
       updateConvStatusBadge();
-      // Pre-warm Render server silently so first user query is fast
-      prewarmServer();
+      // Note: calibrateNetworkRtt() runs on script load and also warms the server
     }
 
     function cacheElements() {
@@ -1927,8 +1926,30 @@
       console.log('🔥 Server pre-warmed');
     }
 
-    // No RTT calibration overhead — just show total wall-clock time
-    const _estimatedNetworkRtt = 0;
+    // Network RTT calibration — measure actual round-trip time to subtract from latency
+    let _networkRtt = 0; // Will be calibrated on load
+    async function calibrateNetworkRtt() {
+      const pings = [];
+      for (let i = 0; i < 3; i++) {
+        try {
+          const t0 = performance.now();
+          await fetch(RENDER_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '', mode: 'strict' }),
+          });
+          const rtt = performance.now() - t0;
+          pings.push(rtt);
+        } catch {}
+      }
+      if (pings.length > 0) {
+        // Use minimum ping as baseline (least congestion)
+        _networkRtt = Math.round(Math.min(...pings));
+        console.log(`🌐 Network RTT calibrated: ${_networkRtt}ms (from ${pings.length} pings)`);
+      }
+    }
+    // Calibrate on load (non-blocking, also warms up server)
+    calibrateNetworkRtt();
 
     async function executeMockPipeline(query, turnEl) {
       const startTime = performance.now();
@@ -2055,31 +2076,35 @@
 
       if (cursor) cursor.style.display = 'none';
 
-      // ⏱️ Calculate precise breakdown
-      const appOverhead = Math.round(appSetupDone - startTime); // Our JS code time (DOM, cache check)
-      const serverTotal = Math.round(serverEndTime - serverStartTime); // Server wait (network + LLM + retrieval)
+      // ⏱️ Calculate precise breakdown (NETWORK EXCLUDED)
+      const appOverhead = Math.round(appSetupDone - startTime); // Our JS code time
+      const serverTotalRaw = Math.round(serverEndTime - serverStartTime); // Raw server wait (network + processing)
+      const serverProcessing = Math.max(0, serverTotalRaw - _networkRtt); // TRUE server time (network subtracted!)
       const appFinalize = performance.now();
-      const appPostProcess = Math.round(appFinalize - serverEndTime); // Our post-processing time
-      const totalAppPipeline = appOverhead + appPostProcess; // Total APP time (excluding server)
+      const appPostProcess = Math.round(appFinalize - serverEndTime);
+      const totalAppPipeline = appOverhead + appPostProcess; // Total APP code time
+
+      // Total latency = App Pipeline + Server Processing (NETWORK EXCLUDED)
+      const totalNetworkExcluded = totalAppPipeline + serverProcessing;
 
       currentStages.stt = 1;
-      currentStages.retrieval = serverTotal; // This is server time (includes LLM gen)
+      currentStages.retrieval = serverProcessing; // True server processing (network excluded)
       currentStages.guardrail = 0;
-      currentStages.generation = totalAppPipeline; // Our app pipeline overhead
+      currentStages.generation = totalAppPipeline;
 
       const modeLabel = brainMode === 'strict' ? '🛡️ Strict' : '🧠 Full';
       currentTurnGrounding = `Qdrant Live (${modeLabel})`;
       const groundingEl = turnEl.querySelector('[data-role="grounding"]');
       if (groundingEl) groundingEl.textContent = currentTurnGrounding;
 
-      // Pass APP pipeline time (not server time) as the latency metric
-      // This is what judges care about: <200ms excluding LLM generation
-      finishTurn(turnEl, totalAppPipeline, query);
+      // Pass NETWORK-EXCLUDED latency as the official score
+      finishTurn(turnEl, totalNetworkExcluded, query);
 
-      // Store server time for detailed display
-      _lastServerTime = serverTotal;
+      // Store detailed timing for UI display
+      _lastServerProcessing = serverProcessing;
+      _lastNetworkRtt = _networkRtt;
       _lastAppTime = totalAppPipeline;
-      _lastTTFB = Math.round(serverTTFB);
+      _lastServerRaw = serverTotalRaw;
 
       // Cache successful answers for instant replay
       if (answer && answer.length > 5 && !answer.startsWith('⚠️') && !answer.startsWith('Error')) {
@@ -2093,9 +2118,10 @@
     }
 
     // Timing storage for detailed latency display
-    let _lastServerTime = 0;
+    let _lastServerProcessing = 0;
+    let _lastNetworkRtt = 0;
     let _lastAppTime = 0;
-    let _lastTTFB = 0;
+    let _lastServerRaw = 0;
 
     function streamMockTokens(turnEl, fullText, targetDuration, onDone) {
       const tokens = fullText.match(/(\S+|\s+)/g) || [fullText];
@@ -2193,15 +2219,14 @@
       const badge = document.getElementById('topbar-latency');
       if (!badge) return;
 
-      const appMs = Math.round(ms);
-      const serverMs = _lastServerTime || 0;
+      const totalMs = Math.round(ms);
 
-      // Show both app pipeline and server time
-      if (serverMs > 0) {
-        badge.textContent = `⚡ Pipeline: ${appMs}ms  ·  Server (incl. LLM): ${serverMs}ms`;
+      if (_lastServerProcessing > 0) {
+        // Normal query: show network-excluded breakdown
+        badge.textContent = `⚡ ${totalMs}ms (Net Excluded)  ·  App: ${_lastAppTime}ms  ·  Server: ${_lastServerProcessing}ms  ·  Network: ${_lastNetworkRtt}ms subtracted`;
       } else {
-        // Cache hit — no server call
-        badge.textContent = `⚡ Pipeline: ${appMs}ms  ·  Cache Hit ⚡`;
+        // Cache hit
+        badge.textContent = `⚡ ${totalMs}ms  ·  Cache Hit ⚡`;
       }
       badge.classList.add('has-value');
     }
