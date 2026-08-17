@@ -2170,9 +2170,9 @@
         const p50 = Math.round(getPercentile(latencies, 50));
         const p70 = Math.round(getPercentile(latencies, 70));
         const p100 = Math.round(getPercentile(latencies, 100));
-        badge.textContent = `⚡ Local: ${Math.round(ms)}ms  ·  P50: ${p50}ms  ·  P70: ${p70}ms  ·  P100: ${p100}ms`;
+        badge.textContent = `⚡ App Latency: ${Math.round(ms)}ms  ·  P50: ${p50}ms  ·  P70: ${p70}ms  ·  P100: ${p100}ms (LLM Gen excluded)`;
       } else {
-        badge.textContent = `⚡ Local: ${Math.round(ms)}ms (network excluded)`;
+        badge.textContent = `⚡ App Latency: ${Math.round(ms)}ms (LLM Gen excluded)`;
       }
       badge.classList.add('has-value');
     }
