@@ -852,33 +852,36 @@
     .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
     .btn-tts-toggle svg { width: 14px; height: 14px; }
 
-    /* Brain Mode Toggle */
+    /* Brain Mode Toggle (Inside Chat Input) */
     .btn-mode-toggle {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid var(--glass-border);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid transparent;
       color: var(--text-muted);
-      height: 32px;
+      height: 28px;
       padding: 0 10px;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-full);
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 5px;
       transition: all var(--transition-fast);
       flex-shrink: 0;
-      font-size: 12px;
+      font-size: 11px;
       font-family: var(--font-mono);
+      margin-right: 4px;
     }
     .btn-mode-toggle:hover {
       background: var(--glass-hover);
       color: var(--text-primary);
-      border-color: var(--glass-border-hover);
     }
     .btn-mode-toggle.strict {
-      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.1);
       color: #34d399;
     }
-    .btn-mode-toggle .mode-icon { font-size: 14px; }
+    .btn-mode-toggle.strict:hover {
+      background: rgba(52, 211, 153, 0.2);
+    }
+    .btn-mode-toggle .mode-icon { font-size: 13px; }
     .btn-mode-toggle .mode-label { font-weight: 600; letter-spacing: 0.5px; }
 
     /* Mic listening pulse animation */
@@ -1263,6 +1266,11 @@
             </svg>
           </button>
 
+          <button class="btn-mode-toggle" id="btn-mode-toggle-landing" title="Switch brain mode">
+            <span class="mode-icon" id="mode-icon-landing">🧠</span>
+            <span class="mode-label" id="mode-label-landing">Full</span>
+          </button>
+
           <!-- Text input -->
           <input type="text" class="pill-input" id="landing-input" placeholder="Ask your question..." autocomplete="off">
 
@@ -1309,10 +1317,6 @@
           </div>
           <div class="conv-topbar-right">
             <span class="latency-badge" id="topbar-latency" title="Latest response latency"></span>
-            <button class="btn-mode-toggle" id="btn-mode-toggle" title="Switch brain mode">
-              <span class="mode-icon" id="mode-icon">🧠</span>
-              <span class="mode-label" id="mode-label">Full</span>
-            </button>
             <div class="badge-sm" id="conv-status-badge">
               <span class="badge-dot mock-mode" id="conv-status-dot"></span>
               <span id="conv-status-text">Mock</span>
@@ -1340,6 +1344,10 @@
         <!-- Bottom input bar -->
         <div class="conv-input-bar" id="conv-input-bar">
           <div class="conv-input-inner">
+            <button class="btn-mode-toggle" id="btn-mode-toggle" title="Switch brain mode">
+              <span class="mode-icon" id="mode-icon">🧠</span>
+              <span class="mode-label" id="mode-label">Full</span>
+            </button>
             <input type="text" class="conv-text-input" id="conv-text-input" placeholder="Follow-up question..." autocomplete="off">
             <button class="conv-mic-btn" id="conv-mic-btn" title="Tap to speak">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2260,33 +2268,45 @@
     }
 
     function setupModeToggle() {
-      const btn = document.getElementById('btn-mode-toggle');
-      const icon = document.getElementById('mode-icon');
-      const label = document.getElementById('mode-label');
-      if (!btn) return;
+      const btnChat = document.getElementById('btn-mode-toggle');
+      const iconChat = document.getElementById('mode-icon');
+      const labelChat = document.getElementById('mode-label');
 
-      // Sync UI with current mode
+      const btnLanding = document.getElementById('btn-mode-toggle-landing');
+      const iconLanding = document.getElementById('mode-icon-landing');
+      const labelLanding = document.getElementById('mode-label-landing');
+
+      // Sync UI with current mode for all buttons
       function syncModeUI() {
-        if (brainMode === 'strict') {
-          icon.textContent = '🛡️';
-          label.textContent = 'Safe';
-          btn.classList.add('strict');
-          btn.title = 'Safe Mode (dataset only) — click to switch to Smart Mode';
-        } else {
-          icon.textContent = '🧠';
-          label.textContent = 'Smart';
-          btn.classList.remove('strict');
-          btn.title = 'Smart Mode (LLM + dataset) — click to switch to Safe Mode';
+        const isStrict = brainMode === 'strict';
+        const iconTxt = isStrict ? '🛡️' : '🧠';
+        const labelTxt = isStrict ? 'Safe' : 'Smart';
+        const titleTxt = isStrict ? 'Safe Mode (dataset only) — click to switch to Smart Mode' : 'Smart Mode (LLM + dataset) — click to switch to Safe Mode';
+
+        if (btnChat) {
+          iconChat.textContent = iconTxt;
+          labelChat.textContent = labelTxt;
+          btnChat.title = titleTxt;
+          btnChat.classList.toggle('strict', isStrict);
+        }
+        if (btnLanding) {
+          iconLanding.textContent = iconTxt;
+          labelLanding.textContent = labelTxt;
+          btnLanding.title = titleTxt;
+          btnLanding.classList.toggle('strict', isStrict);
         }
       }
       syncModeUI();
 
-      btn.addEventListener('click', () => {
+      function toggleMode() {
         brainMode = brainMode === 'full' ? 'strict' : 'full';
         localStorage.setItem('brain_mode', brainMode);
         syncModeUI();
         console.log('Brain mode switched to:', brainMode);
-      });
+      }
+
+      if (btnChat) btnChat.addEventListener('click', toggleMode);
+      if (btnLanding) btnLanding.addEventListener('click', toggleMode);
     }
 
     async function speakResponse(text, force = false) {
