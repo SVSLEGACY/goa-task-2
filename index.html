@@ -1900,7 +1900,7 @@
     // ==========================================================================
     // MOCK PIPELINE
     // ==========================================================================
-    const RENDER_API = 'https://goa2.onrender.com/ask';
+    const RENDER_API = '/api/ask'; // Vercel proxy — no CORS issue
 
     // Estimate network RTT overhead (ping to Render)
     let _estimatedNetworkRtt = 150; // default 150ms, will be calibrated
