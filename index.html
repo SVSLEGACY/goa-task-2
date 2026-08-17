@@ -1926,31 +1926,45 @@
       // Stage: Retrieval — call the REAL API with mode
       setTurnStage(turnEl, 'retrieval');
       let answer = '';
+      // Show loading indicator
+      const textEl = turnEl.querySelector('[data-role="response-text"]');
+      if (textEl) textEl.textContent = '🧠 Waking up knowledge base (this may take 30s if asleep)...';
+
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+
         const resp = await fetch(RENDER_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: query, mode: brainMode }),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
+
         if (resp.ok) {
           const rawText = await resp.text();
           const trimmed = rawText.trim();
-          // Try parsing as JSON (API might return {"answer": "...", "source": "..."})
           try {
             const json = JSON.parse(trimmed);
             answer = json.answer || json.response || json.text || json.result || json.output || trimmed;
           } catch (e) {
-            // Plain text response
             answer = trimmed;
           }
-          console.log('API answer:', answer.slice(0, 100));
         } else {
           answer = 'Sorry, I could not retrieve an answer right now. Please try again.';
         }
       } catch (err) {
-        console.error('Retrieval API error:', err);
-        answer = 'Connection to the knowledge base failed. Please check your internet connection.';
+        if (err.name === 'AbortError') {
+          answer = '⚠️ The Render server is currently asleep and taking too long to wake up. Please wait 30 seconds and try your message again!';
+        } else {
+          console.error('Retrieval API error:', err);
+          answer = 'Connection to the knowledge base failed. Please check your internet connection.';
+        }
       }
+
+      // Clear the loading message before streaming
+      if (textEl) textEl.textContent = '';
       const rawRetrievalTime = performance.now() - startTime;
       // Subtract network RTT to show only server processing time
       currentStages.retrieval = Math.max(5, Math.round(rawRetrievalTime - _estimatedNetworkRtt));
