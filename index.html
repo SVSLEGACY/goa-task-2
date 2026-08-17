@@ -852,10 +852,10 @@
     .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
     .btn-tts-toggle svg { width: 14px; height: 14px; }
 
-    /* Brain Mode Toggle (Inside Chat Input) */
+    /* Brain Mode Toggle (Minimal Animated Dot Aesthetic) */
     .btn-mode-toggle {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
       color: var(--text-muted);
       height: 28px;
       padding: 0 10px;
@@ -863,26 +863,53 @@
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 5px;
-      transition: all var(--transition-fast);
+      gap: 6px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       flex-shrink: 0;
       font-size: 11px;
-      font-family: var(--font-mono);
+      font-family: var(--font-sans);
+      font-weight: 500;
       margin-right: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) inset;
     }
+    
     .btn-mode-toggle:hover {
-      background: var(--glass-hover);
+      background: rgba(255, 255, 255, 0.08);
       color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.1);
     }
-    .btn-mode-toggle.strict {
-      background: rgba(52, 211, 153, 0.1);
-      color: #34d399;
+    
+    /* The animated dot */
+    .mode-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #8b5cf6; /* Modern Violet for Smart */
+      box-shadow: 0 0 8px #8b5cf6, 0 0 4px #8b5cf6;
+      animation: pulse-dot-smart 2s infinite alternate;
+      transition: all 0.3s ease;
     }
-    .btn-mode-toggle.strict:hover {
-      background: rgba(52, 211, 153, 0.2);
+    
+    /* Strict (Safe) Mode Styling */
+    .btn-mode-toggle.strict .mode-dot {
+      background-color: #f59e0b; /* Sleek Amber for Safe */
+      box-shadow: 0 0 8px #f59e0b, 0 0 4px #f59e0b;
+      animation: pulse-dot-safe 2s infinite alternate;
     }
-    .btn-mode-toggle .mode-icon { font-size: 13px; }
-    .btn-mode-toggle .mode-label { font-weight: 600; letter-spacing: 0.5px; }
+    
+    .btn-mode-toggle .mode-label {
+      letter-spacing: 0.3px;
+    }
+    
+    @keyframes pulse-dot-smart {
+      0% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 4px #8b5cf6; }
+      100% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 10px #8b5cf6, 0 0 5px #8b5cf6; }
+    }
+    
+    @keyframes pulse-dot-safe {
+      0% { opacity: 0.7; transform: scale(0.9); box-shadow: 0 0 4px #f59e0b; }
+      100% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 10px #f59e0b, 0 0 5px #f59e0b; }
+    }
 
     /* Mic listening pulse animation */
     .conv-mic-btn.listening,
@@ -1267,8 +1294,8 @@
           </button>
 
           <button class="btn-mode-toggle" id="btn-mode-toggle-landing" title="Switch brain mode">
-            <span class="mode-icon" id="mode-icon-landing">🧠</span>
-            <span class="mode-label" id="mode-label-landing">Full</span>
+            <span class="mode-dot" id="mode-dot-landing"></span>
+            <span class="mode-label" id="mode-label-landing">Smart</span>
           </button>
 
           <!-- Text input -->
@@ -1345,8 +1372,8 @@
         <div class="conv-input-bar" id="conv-input-bar">
           <div class="conv-input-inner">
             <button class="btn-mode-toggle" id="btn-mode-toggle" title="Switch brain mode">
-              <span class="mode-icon" id="mode-icon">🧠</span>
-              <span class="mode-label" id="mode-label">Full</span>
+              <span class="mode-dot" id="mode-dot"></span>
+              <span class="mode-label" id="mode-label">Smart</span>
             </button>
             <input type="text" class="conv-text-input" id="conv-text-input" placeholder="Follow-up question..." autocomplete="off">
             <button class="conv-mic-btn" id="conv-mic-btn" title="Tap to speak">
@@ -2269,28 +2296,23 @@
 
     function setupModeToggle() {
       const btnChat = document.getElementById('btn-mode-toggle');
-      const iconChat = document.getElementById('mode-icon');
       const labelChat = document.getElementById('mode-label');
 
       const btnLanding = document.getElementById('btn-mode-toggle-landing');
-      const iconLanding = document.getElementById('mode-icon-landing');
       const labelLanding = document.getElementById('mode-label-landing');
 
       // Sync UI with current mode for all buttons
       function syncModeUI() {
         const isStrict = brainMode === 'strict';
-        const iconTxt = isStrict ? '🛡️' : '🧠';
         const labelTxt = isStrict ? 'Safe' : 'Smart';
         const titleTxt = isStrict ? 'Safe Mode (dataset only) — click to switch to Smart Mode' : 'Smart Mode (LLM + dataset) — click to switch to Safe Mode';
 
         if (btnChat) {
-          iconChat.textContent = iconTxt;
           labelChat.textContent = labelTxt;
           btnChat.title = titleTxt;
           btnChat.classList.toggle('strict', isStrict);
         }
         if (btnLanding) {
-          iconLanding.textContent = iconTxt;
           labelLanding.textContent = labelTxt;
           btnLanding.title = titleTxt;
           btnLanding.classList.toggle('strict', isStrict);
