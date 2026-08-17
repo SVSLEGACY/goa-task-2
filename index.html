@@ -1955,6 +1955,11 @@
       // Subtract network RTT to show only server processing time
       currentStages.retrieval = Math.max(5, Math.round(rawRetrievalTime - _estimatedNetworkRtt));
 
+      // If answer is empty (API down/sleeping), show a helpful message
+      if (!answer || answer.length < 2) {
+        answer = '⚠️ The knowledge base server is starting up (Render cold start). Please wait 30 seconds and try again — it will be fast after that!';
+      }
+
       // Stage: Guardrail (pass-through)
       setTurnStage(turnEl, 'guardrail');
       currentStages.guardrail = 3;
