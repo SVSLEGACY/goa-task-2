@@ -1637,6 +1637,8 @@
       connectWebSocket();
       setupModeToggle();
       updateConvStatusBadge();
+      // Pre-warm Render server silently so first user query is fast
+      prewarmServer();
     }
 
     function cacheElements() {
@@ -1898,30 +1900,64 @@
 
 
     // ==========================================================================
-    // MOCK PIPELINE
+    // REAL-TIME PIPELINE — Fast, Cached, Pre-warmed
     // ==========================================================================
     const RENDER_API = '/api/ask'; // Vercel proxy — no CORS issue
 
-    // Estimate network RTT overhead (ping to Render)
-    let _estimatedNetworkRtt = 150; // default 150ms, will be calibrated
-    async function calibrateNetworkRtt() {
-      try {
-        const t0 = performance.now();
-        await fetch('https://goa2.onrender.com/health', { method: 'GET', mode: 'cors' });
-        const rtt = performance.now() - t0;
-        _estimatedNetworkRtt = Math.round(rtt);
-        console.log(`Network RTT calibrated: ${_estimatedNetworkRtt}ms`);
-      } catch(e) { /* keep default */ }
+    // Response cache — instant replay for repeated questions (LRU, 50 entries max)
+    const _responseCache = new Map();
+    function cacheGet(query, mode) {
+      return _responseCache.get(`${mode}::${query.trim().toLowerCase()}`);
     }
-    // Calibrate on first load
-    calibrateNetworkRtt();
+    function cacheSet(query, mode, answer) {
+      const key = `${mode}::${query.trim().toLowerCase()}`;
+      if (_responseCache.size >= 50) {
+        _responseCache.delete(_responseCache.keys().next().value);
+      }
+      _responseCache.set(key, answer);
+    }
+
+    // Pre-warm the Render server silently on page load
+    function prewarmServer() {
+      fetch(RENDER_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'hi', mode: 'strict' }),
+      }).catch(() => {});
+      console.log('🔥 Server pre-warmed');
+    }
+
+    // No RTT calibration overhead — just show total wall-clock time
+    const _estimatedNetworkRtt = 0;
 
     async function executeMockPipeline(query, turnEl) {
       const startTime = performance.now();
 
       // Stage: STT (instant, text already available)
       setTurnStage(turnEl, 'stt');
-      currentStages.stt = 2;
+      currentStages.stt = 1;
+
+      // ⚡ CACHE HIT — serve instantly with 0ms server latency
+      const cachedAnswer = cacheGet(query, brainMode);
+      if (cachedAnswer) {
+        console.log('⚡ Cache hit!');
+        const textEl = turnEl.querySelector('[data-role="response-text"]');
+        const cursor = turnEl.querySelector('[data-role="cursor"]');
+        if (textEl) textEl.textContent = cachedAnswer;
+        if (cursor) cursor.style.display = 'none';
+        currentTurnAnswer = cachedAnswer;
+        currentStages.retrieval = 0;
+        currentStages.guardrail = 0;
+        currentStages.generation = Math.round(performance.now() - startTime);
+        const total = currentStages.stt + currentStages.generation;
+        const modeLabel = brainMode === 'strict' ? '🛡️ Strict' : '🧠 Full';
+        currentTurnGrounding = `Cache Hit — Qdrant (${modeLabel})`;
+        const groundingEl = turnEl.querySelector('[data-role="grounding"]');
+        if (groundingEl) groundingEl.textContent = currentTurnGrounding;
+        finishTurn(turnEl, total, query);
+        if (ttsEnabled && cachedAnswer) speakResponse(cachedAnswer);
+        return;
+      }
 
       // Stage: Retrieval — call the REAL API with mode
       setTurnStage(turnEl, 'retrieval');
@@ -2015,10 +2051,14 @@
 
       // Already streamed to DOM in real-time — finalize the turn
       const totalRaw = performance.now() - startTime;
-      const netLatency = Math.max(10, Math.round(totalRaw - _estimatedNetworkRtt));
-      currentStages.generation = Math.max(3, netLatency - currentStages.stt - currentStages.retrieval - currentStages.guardrail);
+      currentStages.generation = Math.max(3, Math.round(totalRaw) - currentStages.stt - currentStages.retrieval - currentStages.guardrail);
       const total = currentStages.stt + currentStages.retrieval + currentStages.guardrail + currentStages.generation;
       finishTurn(turnEl, total, query);
+
+      // Cache successful answers for instant replay
+      if (answer && answer.length > 5 && !answer.startsWith('⚠️') && !answer.startsWith('Error')) {
+        cacheSet(query, brainMode, answer);
+      }
 
       // TTS: speak the full answer
       if (ttsEnabled && answer) {
