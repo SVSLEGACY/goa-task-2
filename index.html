@@ -852,36 +852,36 @@
     .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
     .btn-tts-toggle svg { width: 14px; height: 14px; }
 
-    /* Brain Mode Toggle (Sliding Pill Design) */
+    /* Brain Mode Toggle (Sleek Black & White Sliding Pill) */
     .btn-mode-toggle {
       position: relative;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      height: 28px;
-      width: 66px; /* Fixed width for sliding effect */
-      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.08); /* Slightly more visible pill background */
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      height: 30px;
+      width: 72px; /* Slightly wider for perfect text fit */
+      border-radius: 15px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      margin-right: 4px;
+      margin-right: 6px;
       padding: 0;
       transition: background 0.3s ease;
       flex-shrink: 0;
     }
     
     .btn-mode-toggle:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
     }
     
     /* The sliding circle */
     .mode-slider-circle {
       position: absolute;
       top: 3px;
-      width: 20px;
-      height: 20px;
+      width: 22px; /* Slightly larger circle */
+      height: 22px;
       border-radius: 50%;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       z-index: 1;
     }
     
@@ -893,33 +893,34 @@
       font-family: var(--font-sans);
       font-weight: 600;
       width: 100%;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.5px;
       transition: all 0.3s ease;
       pointer-events: none;
+      display: flex;
+      align-items: center;
+    }
+    
+    /* Default (Smart Mode) - Circle on the Right (White Circle) */
+    .btn-mode-toggle:not(.strict) .mode-slider-circle {
+      left: calc(100% - 25px); /* 72px - 22px (width) - 3px (padding) */
+      background: #ffffff; 
+    }
+    .btn-mode-toggle:not(.strict) .mode-label {
+      justify-content: flex-start;
+      padding-left: 10px;
       color: rgba(255,255,255,0.9);
     }
     
-    /* Default (Smart Mode) - Circle on the Right */
-    .btn-mode-toggle:not(.strict) .mode-slider-circle {
-      left: calc(100% - 23px);
-      background: #8b5cf6; /* Modern Violet */
-    }
-    .btn-mode-toggle:not(.strict) .mode-label {
-      padding-left: 8px;
-      padding-right: 22px;
-      text-align: left;
-    }
-    
-    /* Strict (Safe Mode) - Circle on the Left */
+    /* Strict (Safe Mode) - Circle on the Left (Dark Circle) */
     .btn-mode-toggle.strict .mode-slider-circle {
       left: 3px;
-      background: #9ca3af; /* Minimal Gray */
+      background: #111111; /* Almost black */
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
     .btn-mode-toggle.strict .mode-label {
-      padding-left: 22px;
-      padding-right: 8px;
-      text-align: right;
-      color: rgba(255,255,255,0.6);
+      justify-content: flex-end;
+      padding-right: 12px;
+      color: rgba(255,255,255,0.7);
     }
 
     /* Mic listening pulse animation */
