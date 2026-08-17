@@ -191,6 +191,14 @@
       opacity: 0;
       width: 0;
       overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .sidebar.collapsed .sidebar-footer {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
     }
 
     .btn-sidebar-toggle {
@@ -311,12 +319,12 @@
       padding: 12px 14px;
       display: flex;
       align-items: center;
+      justify-content: flex-start;
       gap: 8px;
       flex-shrink: 0;
       cursor: pointer;
-      transition: background var(--transition-fast);
+      transition: background var(--transition-fast), justify-content var(--transition-fast);
       border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-      /* No border-top */
     }
 
     .sidebar-footer:hover { background: var(--glass-hover); }
