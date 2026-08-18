@@ -2108,6 +2108,12 @@
         currentTurnGrounding = `Cache Hit — Qdrant (${modeLabel})`;
         const groundingEl = turnEl.querySelector('[data-role="grounding"]');
         if (groundingEl) groundingEl.textContent = currentTurnGrounding;
+        
+        // Reset server stats for cache hit display
+        _lastServerProcessing = 0;
+        _lastNetworkRtt = 0;
+        _lastServerRaw = 0;
+        
         finishTurn(turnEl, total, query);
         if (ttsEnabled && cachedAnswer) speakResponse(cachedAnswer);
         return;
@@ -3020,6 +3026,12 @@
           if (msg.tokens) currentTurnTokens = msg.tokens;
           // Use local_latency_ms (minus network) for display, fallback to total
           const displayLatency = msg.local_latency_ms != null ? msg.local_latency_ms : msg.total_latency_ms;
+          
+          _lastServerProcessing = displayLatency;
+          _lastAppTime = 0;
+          _lastNetworkRtt = msg.total_latency_ms ? Math.round(msg.total_latency_ms - displayLatency) : 0;
+          _lastServerRaw = msg.total_latency_ms || displayLatency;
+
           finishTurn(turnEl, displayLatency, currentTurnQuery);
           break;
         }
