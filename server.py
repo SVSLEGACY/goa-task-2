@@ -124,7 +124,7 @@ async def push_tts_audio_to_websocket(websocket: WebSocket, text: str):
             },
             json={
                 "text": tts_text,
-                "model_id": "eleven_turbo_v2_5",
+                "model_id": "eleven_flash_v2_5",
                 "voice_settings": {
                     "stability": 0.3,
                     "similarity_boost": 0.5,
@@ -625,14 +625,16 @@ async def tts_proxy(request: Request):
                 },
                 json={
                     "text": text,
-                    "model_id": "eleven_multilingual_v2",
+                    "model_id": "eleven_flash_v2_5",
                     "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.75,
+                        "stability": 0.3,
+                        "similarity_boost": 0.5,
+                        "speed": 1.2,
                     },
                 },
                 params={
-                    "output_format": "mp3_44100_64",
+                    "output_format": "mp3_22050_32",
+                    "optimize_streaming_latency": "4",
                 },
             ) as resp:
                 if resp.status_code != 200:

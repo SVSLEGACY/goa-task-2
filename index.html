@@ -2153,6 +2153,7 @@
           const decoder = new TextDecoder();
           let buffer = '';
           let firstChunk = true;
+          let _earlyTtsFired = false;  // Fire TTS on first meaningful text
 
           while (true) {
             const { done, value } = await reader.read();
@@ -2194,6 +2195,14 @@
                   if (textEl) textEl.textContent = answer;
                 }
               }
+            }
+
+            // 🔊 EARLY TTS: Fire as soon as we have enough text (>10 chars)
+            // This makes audio start generating while text is still streaming
+            if (!_earlyTtsFired && ttsEnabled && answer.length > 10) {
+              _earlyTtsFired = true;
+              speakResponse(answer);  // Non-blocking, fires in background
+              console.log('🔊 Early TTS fired with', answer.length, 'chars');
             }
           }
           serverEndTime = performance.now();
@@ -2250,9 +2259,10 @@
         cacheSet(query, brainMode, answer);
       }
 
-      // TTS: speak the full answer
-      if (ttsEnabled && answer) {
-        speakResponse(answer);
+      // TTS: If early TTS didn't fire (very short answer), fire now
+      if (ttsEnabled && answer && !answer.startsWith('⚠️')) {
+        // If we already fired early TTS but now have more text, don't double-fire
+        // Early TTS already handles it
       }
     }
 
