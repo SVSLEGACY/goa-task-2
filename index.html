@@ -3038,12 +3038,22 @@
 
 
     // ==========================================================================
-    // VOICE INPUT — Continuous listening with silence debounce
+    // VOICE INPUT — Extreme Listening Mode
+    // Multi-language | Smart silence | Sentence completion | Live speculative prefetch
     // ==========================================================================
     let _voiceFinalTranscript = '';
+    let _voiceInterimTranscript = '';
     let _voiceSilenceTimer = null;
-    const SILENCE_TIMEOUT_MS = 2000;  // Wait 2s of silence before submitting (faster for production)
+    let _voiceSpecPrefetchTimer = null;
     let _voiceContext = 'landing';
+    let _voiceRestartCount = 0;
+
+    // Timeouts
+    const SILENCE_TIMEOUT_MS = 1200;       // Submit after 1.2s of silence (was 2s)
+    const SPEC_PREFETCH_VOICE_MS = 600;    // Start prefetching after 600ms of partial speech
+
+    // Sentence-ending pattern — if user says a complete sentence, submit faster
+    const SENTENCE_END_RE = /[.?!।]\s*$/;
 
     function setupSpeechRecognition() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3051,78 +3061,141 @@
         console.warn('SpeechRecognition API not available in this browser');
         return;
       }
-      speechRecognition = new SR();
-      speechRecognition.continuous = true;          // KEEP listening — don't stop on pause
-      speechRecognition.interimResults = true;       // Show partial words instantly
-      speechRecognition.maxAlternatives = 1;
-      speechRecognition.lang = 'en-US';  // Default English, works for Hinglish too
+
+      function createRecognizer() {
+        const sr = new SR();
+        sr.continuous = true;
+        sr.interimResults = true;          // Live partial words instantly
+        sr.maxAlternatives = 3;            // Get top-3 alternatives for better accuracy
+        // Multi-language: Hindi, Indian English, US English — browser picks best
+        sr.lang = 'hi-IN';                 // Primary: Hindi/Hinglish (handles English words too)
+        return sr;
+      }
+
+      speechRecognition = createRecognizer();
 
       speechRecognition.onstart = () => {
         _voiceFinalTranscript = '';
+        _voiceInterimTranscript = '';
+        _voiceRestartCount = 0;
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+        if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
+        console.log('🎙️ Voice recognition started');
       };
 
       speechRecognition.onresult = (event) => {
-        // Clear any pending silence timer — user is still speaking
+        // Cancel all pending timers — user is still speaking
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+        if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
 
-        let interim_transcript = '';
+        let newFinal = '';
+        let interimNow = '';
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            _voiceFinalTranscript += transcript;
+          const result = event.results[i];
+          // Pick best alternative with highest confidence
+          let bestText = result[0].transcript;
+          let bestConf = result[0].confidence || 0;
+          for (let j = 1; j < result.length; j++) {
+            if ((result[j].confidence || 0) > bestConf) {
+              bestConf = result[j].confidence;
+              bestText = result[j].transcript;
+            }
+          }
+
+          if (result.isFinal) {
+            // Only accept if confidence > 0.4 OR confidence is 0 (some browsers don't set it)
+            if (bestConf === 0 || bestConf > 0.4) {
+              newFinal += bestText;
+            }
           } else {
-            interim_transcript += transcript;
+            interimNow += bestText;
           }
         }
 
-        // Show accumulated text in input box (final + interim combined)
-        const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
-        inputEl.value = _voiceFinalTranscript + interim_transcript;
+        if (newFinal) _voiceFinalTranscript += newFinal;
+        _voiceInterimTranscript = interimNow;
 
-        // Set silence debounce — if no new speech for 2.5s AND we have final text, submit
+        const fullText = (_voiceFinalTranscript + interimNow).trim();
+
+        // Show in input box live
+        const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+        inputEl.value = fullText;
+
+        if (!fullText) return;
+
+        // SMART SENTENCE COMPLETION — don't wait for silence if sentence is clearly complete
+        if (SENTENCE_END_RE.test(fullText) && _voiceFinalTranscript.trim().length > 4) {
+          console.log('✅ Sentence complete, submitting immediately');
+          if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
+          const finalQuery = _voiceFinalTranscript.trim();
+          stopVoiceInput();
+          inputEl.value = '';
+          submitQuery(finalQuery);
+          return;
+        }
+
+        // SPECULATIVE PREFETCH — start prefetching in background as user speaks
+        _voiceSpecPrefetchTimer = setTimeout(() => {
+          const partial = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
+          if (partial.length >= 5) {
+            speculativePrefetch(partial, brainMode);
+          }
+        }, SPEC_PREFETCH_VOICE_MS);
+
+        // SILENCE DEBOUNCE — submit if user pauses for SILENCE_TIMEOUT_MS
         if (_voiceFinalTranscript.trim()) {
           _voiceSilenceTimer = setTimeout(() => {
             if (!isListening) return;
-            const fullText = _voiceFinalTranscript.trim();
-            if (fullText) {
+            const finalQuery = _voiceFinalTranscript.trim();
+            if (finalQuery) {
               stopVoiceInput();
-              const inputEl2 = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
-              inputEl2.value = '';
-              submitQuery(fullText);
+              inputEl.value = '';
+              submitQuery(finalQuery);
             }
           }, SILENCE_TIMEOUT_MS);
         }
       };
 
       speechRecognition.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('🎙️ Speech error:', event.error);
         if (event.error === 'no-speech') {
-          // No speech detected — restart if still listening
-          if (isListening) {
+          // No speech yet — keep waiting, restart if needed
+          if (isListening && _voiceRestartCount < 5) {
+            _voiceRestartCount++;
             try { speechRecognition.start(); } catch(e) {}
+          }
+          return;
+        }
+        if (event.error === 'network') {
+          // Network glitch — try restart
+          if (isListening) {
+            setTimeout(() => {
+              try { speechRecognition.start(); } catch(e) {}
+            }, 300);
           }
           return;
         }
         stopVoiceInput();
         if (event.error === 'not-allowed') {
           const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
-          inputEl.placeholder = 'Mic permission denied. Type instead...';
-          setTimeout(() => { inputEl.placeholder = 'Ask your question...'; }, 3000);
+          inputEl.placeholder = '🎙️ Mic permission denied. Allow mic access and try again.';
+          setTimeout(() => { inputEl.placeholder = _voiceContext === 'landing' ? 'Ask your question...' : 'Follow-up question...'; }, 4000);
         }
       };
 
       speechRecognition.onend = () => {
-        // Browser may auto-stop after ~60s or on pause — AUTO-RESTART if user still listening
+        // Browser auto-stops after ~60s or on pause — AUTO-RESTART if user still listening
         if (isListening) {
           try {
             speechRecognition.start();
+            console.log('🔄 Voice auto-restarted');
           } catch (e) {
-            // Can't restart — submit what we have
+            // Can't restart — submit whatever we have
             if (_voiceFinalTranscript.trim()) {
               const fullText = _voiceFinalTranscript.trim();
-              stopVoiceInput();
               const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+              stopVoiceInput();
               inputEl.value = '';
               submitQuery(fullText);
             } else {
