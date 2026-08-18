@@ -2012,11 +2012,10 @@
 
     async function speculativePrefetch(query, mode) {
       const q = query.trim();
-      if (q.length < 3) return; // Too short to be meaningful
-      if (q === _specLastPrefetchedQuery) return; // Already prefetched this
-      if (cacheGet(q, mode)) return; // Already cached
+      if (q.length < 3) return;
+      if (q === _specLastPrefetchedQuery) return;
+      if (cacheGet(q, mode)) return;
 
-      // Cancel any in-flight prefetch
       if (_specPrefetchAbort) _specPrefetchAbort.abort();
       _specPrefetchAbort = new AbortController();
       _specLastPrefetchedQuery = q;
@@ -2032,7 +2031,6 @@
 
         if (!resp.ok) return;
 
-        // Stream the SSE response into a string and cache it silently
         const reader = resp.body.getReader();
         const dec = new TextDecoder();
         let prefetchedAnswer = '';
@@ -2057,16 +2055,16 @@
 
         if (prefetchedAnswer.length > 2) {
           cacheSet(q, mode, prefetchedAnswer);
-          console.log(`✅ Speculative cache primed: "${q}" → "${prefetchedAnswer.slice(0, 40)}..."`);
+          console.log(`✅ Cache primed: "${q}" → "${prefetchedAnswer.slice(0, 40)}..."`);
         }
       } catch (e) {
-        if (e.name !== 'AbortError') console.warn('Speculative prefetch error:', e.message);
+        if (e.name !== 'AbortError') console.warn('Prefetch error:', e.message);
       }
     }
 
-    // Hook speculative prefetch onto both input boxes with debounce
+    // Hook speculative prefetch onto both input boxes — ULTRA FAST debounce
     function setupSpeculativePrefetch() {
-      const DEBOUNCE_MS = 400; // Start prefetching 400ms after user stops typing
+      const DEBOUNCE_MS = 200; // Fire after only 200ms pause (was 400ms)
 
       function onInput(e) {
         const q = e.target.value.trim();
@@ -2083,6 +2081,39 @@
       if (convInput) convInput.addEventListener('input', onInput);
     }
     setupSpeculativePrefetch();
+
+    // ==========================================================================
+    // AGGRESSIVE PRE-WARMING — Cache popular queries on page load
+    // User's first query will be instant if it matches any of these
+    // ==========================================================================
+    async function preCachePopularQueries() {
+      // Wait for server to warm up first (calibration already sent 3 pings)
+      await new Promise(r => setTimeout(r, 2000));
+
+      const popularQueries = [
+        // Chip queries from landing page
+        { q: 'What is speculative vector search and how does parent-child chunking work?', m: 'full' },
+        { q: 'MSMARCO-XI dataset me Hindi aur English context kaise retrieve hota hai?', m: 'full' },
+        // Common user queries
+        { q: 'How to make tea?', m: 'full' },
+        { q: 'capital of France', m: 'strict' },
+        { q: 'beaches in Goa', m: 'full' },
+        { q: 'What is machine learning?', m: 'full' },
+      ];
+
+      // Fetch them sequentially to avoid server flood, but silently
+      for (const { q, m } of popularQueries) {
+        if (cacheGet(q, m)) continue; // Already cached
+        try {
+          await speculativePrefetch(q, m);
+          // Small delay between queries to not overwhelm server
+          await new Promise(r => setTimeout(r, 300));
+        } catch {}
+      }
+      console.log('🔥 Pre-cache complete: popular queries warmed up');
+    }
+    // Fire in background — completely non-blocking
+    preCachePopularQueries();
 
     async function executeMockPipeline(query, turnEl) {
       const startTime = performance.now();
@@ -2371,11 +2402,11 @@
       const totalMs = Math.round(ms);
 
       if (_lastServerProcessing > 0) {
-        // Normal query: show network-excluded breakdown
-        badge.textContent = `⚡ ${totalMs}ms (Net Excluded)  ·  App: ${_lastAppTime}ms  ·  Server: ${_lastServerProcessing}ms  ·  Network: ${_lastNetworkRtt}ms subtracted`;
+        // Normal query: show just the key number
+        badge.textContent = `⚡ ${totalMs}ms · Server: ${_lastServerProcessing}ms`;
       } else {
-        // Cache hit
-        badge.textContent = `⚡ ${totalMs}ms  ·  Cache Hit ⚡`;
+        // Cache hit — instant
+        badge.textContent = `⚡ ${totalMs}ms · Cache Hit`;
       }
       badge.classList.add('has-value');
     }
