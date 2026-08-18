@@ -2460,7 +2460,8 @@
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(text.slice(0, 500));
-          utterance.lang = 'en-US';
+          const isHindi = /[\u0900-\u097F]/.test(text);
+          utterance.lang = isHindi ? 'hi-IN' : 'en-IN';
           utterance.rate = 1.1;
           utterance.pitch = 1.0;
           window.speechSynthesis.speak(utterance);
@@ -3067,8 +3068,8 @@
         sr.continuous = true;
         sr.interimResults = true;          // Live partial words instantly
         sr.maxAlternatives = 3;            // Get top-3 alternatives for better accuracy
-        // Multi-language: Hindi, Indian English, US English — browser picks best
-        sr.lang = 'hi-IN';                 // Primary: Hindi/Hinglish (handles English words too)
+        // Set to en-IN to force English (Roman) script output for both English and Hinglish
+        sr.lang = 'en-IN';                 
         return sr;
       }
 
