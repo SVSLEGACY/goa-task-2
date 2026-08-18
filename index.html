@@ -3103,8 +3103,8 @@
     let _voiceRestartCount = 0;
 
     // Timeouts
-    const SILENCE_TIMEOUT_MS = 1200;       // Submit after 1.2s of silence (was 2s)
-    const SPEC_PREFETCH_VOICE_MS = 600;    // Start prefetching after 600ms of partial speech
+    const SILENCE_TIMEOUT_MS = 2500;       // Submit after 2.5s of silence — let user finish full sentence
+    const SPEC_PREFETCH_VOICE_MS = 800;    // Start prefetching after 800ms of partial speech
 
     // Sentence-ending pattern — if user says a complete sentence, submit faster
     const SENTENCE_END_RE = /[.?!।]\s*$/;
@@ -3120,9 +3120,8 @@
         const sr = new SR();
         sr.continuous = true;
         sr.interimResults = true;          // Live partial words instantly
-        sr.maxAlternatives = 3;            // Get top-3 alternatives for better accuracy
-        // Set to en-IN to force English (Roman) script output for both English and Hinglish
-        sr.lang = 'en-IN';                 
+        sr.maxAlternatives = 1;            // First alternative is always best in Chrome
+        sr.lang = 'en-IN';                 // English (India) — Roman script output
         return sr;
       }
 
@@ -3138,7 +3137,7 @@
       };
 
       speechRecognition.onresult = (event) => {
-        // Cancel all pending timers — user is still speaking
+        // Cancel silence timer — user is still speaking
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
         if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
 
@@ -3146,24 +3145,14 @@
         let interimNow = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const result = event.results[i];
-          // Pick best alternative with highest confidence
-          let bestText = result[0].transcript;
-          let bestConf = result[0].confidence || 0;
-          for (let j = 1; j < result.length; j++) {
-            if ((result[j].confidence || 0) > bestConf) {
-              bestConf = result[j].confidence;
-              bestText = result[j].transcript;
-            }
-          }
+          const transcript = event.results[i][0].transcript;
 
-          if (result.isFinal) {
-            // Only accept if confidence > 0.4 OR confidence is 0 (some browsers don't set it)
-            if (bestConf === 0 || bestConf > 0.4) {
-              newFinal += bestText;
-            }
+          if (event.results[i].isFinal) {
+            // Accept ALL final results — no confidence filtering
+            // Chrome's speech engine already filters low-confidence internally
+            newFinal += transcript;
           } else {
-            interimNow += bestText;
+            interimNow += transcript;
           }
         }
 
@@ -3178,8 +3167,9 @@
 
         if (!fullText) return;
 
-        // SMART SENTENCE COMPLETION — don't wait for silence if sentence is clearly complete
-        if (SENTENCE_END_RE.test(fullText) && _voiceFinalTranscript.trim().length > 4) {
+        // SMART SENTENCE COMPLETION — only if we have a substantial final transcript
+        // Must have at least 8 chars of FINAL text + end punctuation to auto-submit
+        if (SENTENCE_END_RE.test(_voiceFinalTranscript) && _voiceFinalTranscript.trim().length > 8) {
           console.log('✅ Sentence complete, submitting immediately');
           if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
           const finalQuery = _voiceFinalTranscript.trim();
@@ -3198,11 +3188,12 @@
         }, SPEC_PREFETCH_VOICE_MS);
 
         // SILENCE DEBOUNCE — submit if user pauses for SILENCE_TIMEOUT_MS
-        if (_voiceFinalTranscript.trim()) {
+        // Only trigger if we have meaningful text (at least 3 chars of final text)
+        if (_voiceFinalTranscript.trim().length >= 3) {
           _voiceSilenceTimer = setTimeout(() => {
             if (!isListening) return;
-            const finalQuery = _voiceFinalTranscript.trim();
-            if (finalQuery) {
+            const finalQuery = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
+            if (finalQuery && finalQuery.length >= 3) {
               stopVoiceInput();
               inputEl.value = '';
               submitQuery(finalQuery);
@@ -3214,19 +3205,20 @@
       speechRecognition.onerror = (event) => {
         console.warn('🎙️ Speech error:', event.error);
         if (event.error === 'no-speech') {
-          // No speech yet — keep waiting, restart if needed
-          if (isListening && _voiceRestartCount < 5) {
+          // No speech yet — keep waiting, restart up to 15 times (~60s)
+          if (isListening && _voiceRestartCount < 15) {
             _voiceRestartCount++;
             try { speechRecognition.start(); } catch(e) {}
           }
           return;
         }
-        if (event.error === 'network') {
-          // Network glitch — try restart
-          if (isListening) {
+        if (event.error === 'network' || event.error === 'audio-capture') {
+          // Network or audio glitch — retry with delay
+          if (isListening && _voiceRestartCount < 15) {
+            _voiceRestartCount++;
             setTimeout(() => {
               try { speechRecognition.start(); } catch(e) {}
-            }, 300);
+            }, 500);
           }
           return;
         }
