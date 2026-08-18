@@ -2275,6 +2275,12 @@
               console.log('🔊 Early TTS fired with', answer.length, 'chars');
             }
           }
+          
+          if (!answer.trim()) {
+            answer = '⚠️ The server is waking up from sleep. Please try asking again in a few seconds.';
+            if (textEl) textEl.textContent = answer;
+          }
+          
           serverEndTime = performance.now();
         } else {
           const errText = await resp.text().catch(() => '');
@@ -2284,7 +2290,7 @@
         }
       } catch (err) {
         if (err.name === 'AbortError') {
-          answer = '⚠️ Request timed out. Please try again!';
+          answer = '⚠️ Request timed out. The server is likely waking up. Please try again.';
         } else {
           answer = `⚠️ ${err.message || 'Connection error. Please check your internet.'}`;
         }
@@ -3184,25 +3190,22 @@
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
         if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
 
-        let newFinal = '';
-        let interimNow = '';
+        let currentFinal = '';
+        let currentInterim = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           const transcript = event.results[i][0].transcript;
-
           if (event.results[i].isFinal) {
-            // Accept ALL final results — no confidence filtering
-            // Chrome's speech engine already filters low-confidence internally
-            newFinal += transcript;
+            currentFinal += transcript;
           } else {
-            interimNow += transcript;
+            currentInterim += transcript;
           }
         }
 
-        if (newFinal) _voiceFinalTranscript += newFinal;
-        _voiceInterimTranscript = interimNow;
+        _voiceFinalTranscript = currentFinal;
+        _voiceInterimTranscript = currentInterim;
 
-        const fullText = (_voiceFinalTranscript + interimNow).trim();
+        const fullText = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
 
         // Show in input box live
         const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
