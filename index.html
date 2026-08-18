@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>JARVIS — Voice Engine</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,7 +74,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
-      height: 100%;
+      height: 100dvh;
       overflow: hidden;
     }
 
@@ -93,7 +93,7 @@
       top: 0;
       left: 0;
       width: 100vw;
-      height: 100vh;
+      height: 100dvh;
       object-fit: cover;
       z-index: -2;
       pointer-events: none;
@@ -104,7 +104,7 @@
       top: 0;
       left: 0;
       width: 100vw;
-      height: 100vh;
+      height: 100dvh;
       background: rgba(5, 5, 10, 0.55);
       z-index: -1;
       pointer-events: none;
@@ -115,7 +115,7 @@
        ========================================================================== */
     .app-shell {
       display: flex;
-      height: 100vh;
+      height: 100dvh;
       width: 100%;
       padding: 10px;
       gap: 10px;
@@ -1057,32 +1057,41 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .app-shell { padding: 6px; gap: 6px; }
+      .app-shell { padding: 4px; gap: 4px; }
       .sidebar {
-        position: fixed; left: 6px; top: 6px; bottom: 6px;
+        position: fixed; left: 4px; top: 4px; bottom: 4px;
         z-index: 100;
         border-radius: var(--radius-xl);
+        width: calc(100vw - 40px);
+        max-width: 320px;
+        transform: translateX(0);
+        box-shadow: var(--glass-shadow-lg);
       }
       .sidebar.collapsed {
-        width: var(--sidebar-collapsed);
-        min-width: var(--sidebar-collapsed);
+        transform: translateX(-120%);
+        width: calc(100vw - 40px);
+        min-width: calc(100vw - 40px);
+        border: none;
+      }
+      
+      #btn-sidebar-open, #btn-sidebar-open-landing {
+        display: flex !important;
       }
 
-      .greeting-text { font-size: 28px; }
-
-      .landing-pill { max-width: calc(100% - 32px); }
-
-      .conv-content { padding: 16px 16px 100px; }
-
-      .query-bubble { max-width: 90%; }
+      .greeting-text { font-size: 26px; }
+      .landing-pill { max-width: calc(100% - 16px); width: 100%; border-radius: var(--radius-lg); }
+      .conv-content { padding: 12px 12px 100px; }
+      .query-bubble { max-width: 95%; }
+      .response-bubble { max-width: 98%; padding: 14px; }
+      .conv-topbar { padding: 8px 12px; }
+      .conv-input-bar { padding: 8px 12px 16px; }
+      .mode-label { display: none; } /* Hide mode text on very small screens to save space */
     }
 
     @media (max-width: 480px) {
-      .app-shell { padding: 4px; gap: 4px; }
-      .sidebar.collapsed { width: 0; min-width: 0; border: none; }
-
-      .landing-presets { gap: 6px; }
-      .landing-chip { font-size: 11px; padding: 6px 12px; }
+      .landing-presets { gap: 6px; flex-wrap: wrap; }
+      .landing-chip { font-size: 11px; padding: 6px 12px; flex: 1 1 auto; text-align: center; justify-content: center; }
+      .conv-input-inner { border-radius: var(--radius-lg); }
     }
 
     /* Custom scrollbar — Soft */
@@ -1295,11 +1304,21 @@
       </div>
     </aside>
 
-    <!-- ===== MAIN AREA ===== -->
+      <!-- ===== MAIN AREA ===== -->
     <div class="main-area">
+      <!-- Mobile sidebar overlay -->
+      <div id="mobile-sidebar-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:90; background:rgba(0,0,0,0.5); backdrop-filter:blur(3px);"></div>
 
       <!-- ===== LANDING SCREEN ===== -->
       <div class="landing-screen" id="landing-screen">
+        
+        <!-- Mobile menu button for landing screen -->
+        <button class="btn-icon" id="btn-sidebar-open-landing" title="Open sidebar" style="display:none; position:absolute; top:12px; left:12px; z-index:10; background:var(--glass-bg); border:1px solid var(--glass-border); padding:8px; border-radius:12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
         <h1 class="greeting-text" id="greeting-text">
           <span>Let's jump in,</span>
           <span class="crew-roller"><span id="crew-name" class="roll-in">Straw Hats</span></span>
@@ -1696,6 +1715,8 @@
         sidebar: document.getElementById('sidebar'),
         btnSidebarToggle: document.getElementById('btn-sidebar-toggle'),
         btnSidebarOpen: document.getElementById('btn-sidebar-open'),
+        btnSidebarOpenLanding: document.getElementById('btn-sidebar-open-landing'),
+        mobileSidebarOverlay: document.getElementById('mobile-sidebar-overlay'),
         btnNewChat: document.getElementById('btn-new-chat'),
         convList: document.getElementById('conv-list'),
         sidebarFooter: document.getElementById('sidebar-footer'),
@@ -1727,14 +1748,32 @@
       // Sidebar toggle
       el.btnSidebarToggle.addEventListener('click', () => {
         el.sidebar.classList.toggle('collapsed');
+        if (window.innerWidth <= 768) {
+          el.mobileSidebarOverlay.style.display = el.sidebar.classList.contains('collapsed') ? 'none' : 'block';
+        }
       });
 
-      el.btnSidebarOpen?.addEventListener('click', () => {
+      const openSidebar = () => {
         el.sidebar.classList.remove('collapsed');
+        if (window.innerWidth <= 768) {
+          el.mobileSidebarOverlay.style.display = 'block';
+        }
+      };
+
+      el.btnSidebarOpen?.addEventListener('click', openSidebar);
+      el.btnSidebarOpenLanding?.addEventListener('click', openSidebar);
+
+      el.mobileSidebarOverlay?.addEventListener('click', () => {
+        el.sidebar.classList.add('collapsed');
+        el.mobileSidebarOverlay.style.display = 'none';
       });
 
       // New chat
       el.btnNewChat.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          el.sidebar.classList.add('collapsed');
+          el.mobileSidebarOverlay.style.display = 'none';
+        }
         goToLanding();
       });
 
@@ -2624,6 +2663,10 @@
           </div>
         `;
         item.addEventListener('click', () => {
+          if (window.innerWidth <= 768) {
+            el.sidebar.classList.add('collapsed');
+            if (el.mobileSidebarOverlay) el.mobileSidebarOverlay.style.display = 'none';
+          }
           goToConversation(conv.id, true);
         });
         el.convList.appendChild(item);
@@ -3231,20 +3274,23 @@
       };
 
       speechRecognition.onend = () => {
-        // Browser auto-stops after ~60s or on pause — AUTO-RESTART if user still listening
+        // On Android/Mobile, the native recognizer often stops itself when user pauses.
+        // If we have transcribed text, it's safer to submit it rather than force-restart
+        // which causes UI glitches and double-listening bugs.
         if (isListening) {
-          try {
-            speechRecognition.start();
-            console.log('🔄 Voice auto-restarted');
-          } catch (e) {
-            // Can't restart — submit whatever we have
-            if (_voiceFinalTranscript.trim()) {
-              const fullText = _voiceFinalTranscript.trim();
-              const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
-              stopVoiceInput();
-              inputEl.value = '';
-              submitQuery(fullText);
-            } else {
+          if (_voiceFinalTranscript.trim()) {
+            console.log('✅ Voice ended with text, submitting...');
+            const fullText = _voiceFinalTranscript.trim();
+            const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
+            stopVoiceInput();
+            inputEl.value = '';
+            submitQuery(fullText);
+          } else {
+            // Only try to restart if NO text was captured yet (e.g. random timeout)
+            try {
+              speechRecognition.start();
+              console.log('🔄 Voice auto-restarted (no text captured yet)');
+            } catch (e) {
               stopVoiceInput();
             }
           }
