@@ -1481,6 +1481,8 @@
               <span class="pct-item"><span class="pct-label">P70</span> <span class="pct-value" id="pct-p70">—</span></span>
               <span class="pct-sep">|</span>
               <span class="pct-item"><span class="pct-label">P100</span> <span class="pct-value" id="pct-p100">—</span></span>
+              <span class="pct-sep">|</span>
+              <span class="pct-item"><span class="pct-label">n</span> <span class="pct-value" id="pct-count">0</span></span>
             </div>
             <button class="btn-tts-toggle" id="btn-tts-toggle" title="Toggle voice replies">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1693,6 +1695,12 @@
 
     // Brain mode: 'strict' = dataset only, 'full' = LLM + dataset
     let brainMode = localStorage.getItem('brain_mode') || 'full';
+    // Validate stored brain mode — remove invalid values (e.g. removed 'pro')
+    if (!['full', 'strict'].includes(brainMode)) {
+      brainMode = 'full';
+      localStorage.setItem('brain_mode', brainMode);
+      console.warn('Invalid brain_mode in localStorage, reset to full');
+    }
 
     // Latency history across all conversations (for aggregate metrics)
     let queryLatencyHistory = [];
@@ -2554,27 +2562,39 @@
 
     function updatePercentileStats() {
       const latencies = queryLatencyHistory.map(h => h.latency).filter(l => l > 0);
-      if (latencies.length === 0) return;
+      const n = latencies.length;
 
-      const sorted = [...latencies].sort((a, b) => a - b);
-      const n = sorted.length;
-
-      function percentile(p) {
-        const idx = Math.ceil((p / 100) * n) - 1;
-        return Math.round(sorted[Math.max(0, Math.min(idx, n - 1))]);
-      }
-
-      const p50 = percentile(50);
-      const p70 = percentile(70);
-      const p100 = percentile(100);
-
+      const elCount = document.getElementById('pct-count');
       const el50 = document.getElementById('pct-p50');
       const el70 = document.getElementById('pct-p70');
       const el100 = document.getElementById('pct-p100');
 
+      // Always update query count
+      if (elCount) elCount.textContent = String(n);
+
+      if (n === 0) return;
+
+      const sorted = [...latencies].sort((a, b) => a - b);
+
+      function percentile(p) {
+        if (n === 1) return Math.round(sorted[0]);
+        // Linear interpolation for accurate percentiles
+        const rank = (p / 100) * (n - 1);
+        const lower = Math.floor(rank);
+        const upper = Math.ceil(rank);
+        const weight = rank - lower;
+        return Math.round(sorted[lower] * (1 - weight) + sorted[upper] * weight);
+      }
+
+      const p50 = percentile(50);
+      const p70 = percentile(70);
+      const p100 = sorted[n - 1]; // Max is always the last element
+
       if (el50) el50.textContent = p50 + 'ms';
       if (el70) el70.textContent = p70 + 'ms';
-      if (el100) el100.textContent = p100 + 'ms';
+      if (el100) el100.textContent = Math.round(p100) + 'ms';
+
+      console.log(`📊 Percentiles updated (n=${n}): P50=${p50}ms P70=${p70}ms P100=${Math.round(p100)}ms | raw=[${latencies.join(', ')}]`);
     }
 
 
