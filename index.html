@@ -656,6 +656,44 @@
     .badge-dot { background: var(--text-dim); }
     .badge-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
     .badge-dot.mock-mode { background: var(--warning); }
+
+    /* Percentile latency stats */
+    .percentile-stats {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      white-space: nowrap;
+      transition: opacity 0.3s ease;
+    }
+
+    .percentile-stats .pct-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .percentile-stats .pct-label {
+      color: var(--text-dim);
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .percentile-stats .pct-value {
+      color: var(--text-secondary);
+    }
+
+    .percentile-stats .pct-sep {
+      color: rgba(255, 255, 255, 0.12);
+    }
     .badge-dot.error { background: var(--danger); }
 
     .btn-icon {
@@ -860,75 +898,144 @@
     .btn-tts-toggle.muted { color: var(--danger); border-color: var(--danger-border); }
     .btn-tts-toggle svg { width: 14px; height: 14px; }
 
-    /* Brain Mode Toggle (Sleek Black & White Sliding Pill) */
-    .btn-mode-toggle {
+    /* Brain Mode Dropdown (Gemini-style "Pro ∨" selector) */
+    .mode-dropdown-wrapper {
       position: relative;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .mode-dropdown-trigger {
+      display: flex;
+      align-items: center;
+      gap: 4px;
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      height: 30px;
-      width: 78px; /* Wider to create perfect gap between text and circle */
-      border-radius: 15px;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: var(--radius-full);
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      margin-right: 6px;
-      padding: 0;
-      transition: background 0.3s ease;
-      flex-shrink: 0;
-    }
-    
-    .btn-mode-toggle:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-    
-    /* The sliding circle */
-    .mode-slider-circle {
-      position: absolute;
-      top: 3px;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      z-index: 1;
-    }
-    
-    /* The text label */
-    .mode-label {
-      position: relative;
-      z-index: 2;
-      font-size: 11px;
+      color: rgba(255, 255, 255, 0.85);
       font-family: var(--font-sans);
-      font-weight: 600;
-      width: 100%;
-      letter-spacing: 0.5px;
-      transition: all 0.3s ease;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .mode-dropdown-trigger:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .mode-dropdown-trigger .chevron-icon {
+      width: 14px;
+      height: 14px;
+      opacity: 0.6;
+      transition: transform 0.25s ease;
+    }
+
+    .mode-dropdown-wrapper.open .mode-dropdown-trigger .chevron-icon {
+      transform: rotate(180deg);
+    }
+
+    .mode-dropdown-menu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      right: 0;
+      min-width: 220px;
+      background: rgba(28, 28, 32, 0.92);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.08);
+      padding: 6px;
+      opacity: 0;
       pointer-events: none;
+      transform: translateY(6px) scale(0.96);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .mode-dropdown-wrapper.open .mode-dropdown-menu {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    .mode-dropdown-item {
       display: flex;
       align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      position: relative;
     }
-    
-    /* Default (Smart Mode) - Circle on the Right (White Circle) */
-    .btn-mode-toggle:not(.strict) .mode-slider-circle {
-      left: calc(100% - 25px); /* 78px - 22px - 3px = right aligned */
-      background: #ffffff; 
+
+    .mode-dropdown-item:hover {
+      background: rgba(255, 255, 255, 0.08);
     }
-    .btn-mode-toggle:not(.strict) .mode-label {
-      justify-content: flex-start;
-      padding-left: 12px;
-      color: rgba(255,255,255,0.9);
+
+    .mode-dropdown-item.active {
+      background: rgba(255, 255, 255, 0.06);
     }
-    
-    /* Strict (Safe Mode) - Circle on the Left (Dark Circle) */
-    .btn-mode-toggle.strict .mode-slider-circle {
-      left: 3px;
-      background: #111111;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+
+    .mode-dropdown-check {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-primary);
     }
-    .btn-mode-toggle.strict .mode-label {
-      justify-content: flex-end;
-      padding-right: 14px;
-      color: rgba(255,255,255,0.7);
+
+    .mode-dropdown-check svg {
+      width: 16px;
+      height: 16px;
+      opacity: 0;
+    }
+
+    .mode-dropdown-item.active .mode-dropdown-check svg {
+      opacity: 1;
+    }
+
+    .mode-dropdown-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mode-dropdown-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+    }
+
+    .mode-dropdown-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    .mode-dropdown-badge {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      letter-spacing: 0.3px;
+    }
+
+    .mode-dropdown-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 4px 8px;
     }
 
     /* Mic listening pulse animation */
@@ -1325,17 +1432,6 @@
         </h1>
 
         <div class="landing-pill" id="landing-pill">
-          <!-- Plus / attach button -->
-          <button class="pill-btn" title="Attach context scope">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-
-          <button class="btn-mode-toggle" id="btn-mode-toggle-landing" title="Switch brain mode">
-            <div class="mode-slider-circle"></div>
-            <span class="mode-label" id="mode-label-landing">Smart</span>
-          </button>
 
           <!-- Text input -->
           <input type="text" class="pill-input" id="landing-input" placeholder="Ask your question..." autocomplete="off">
@@ -1379,9 +1475,12 @@
           </div>
           <div class="conv-topbar-right">
             <span class="latency-badge" id="topbar-latency" title="Latest response latency"></span>
-            <div class="badge-sm" id="conv-status-badge">
-              <span class="badge-dot mock-mode" id="conv-status-dot"></span>
-              <span id="conv-status-text">Mock</span>
+            <div class="percentile-stats" id="percentile-stats" title="Pipeline latency percentiles across queries">
+              <span class="pct-item"><span class="pct-label">P50</span> <span class="pct-value" id="pct-p50">—</span></span>
+              <span class="pct-sep">|</span>
+              <span class="pct-item"><span class="pct-label">P70</span> <span class="pct-value" id="pct-p70">—</span></span>
+              <span class="pct-sep">|</span>
+              <span class="pct-item"><span class="pct-label">P100</span> <span class="pct-value" id="pct-p100">—</span></span>
             </div>
             <button class="btn-tts-toggle" id="btn-tts-toggle" title="Toggle voice replies">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1406,10 +1505,6 @@
         <!-- Bottom input bar -->
         <div class="conv-input-bar" id="conv-input-bar">
           <div class="conv-input-inner">
-            <button class="btn-mode-toggle" id="btn-mode-toggle" title="Switch brain mode">
-              <div class="mode-slider-circle"></div>
-              <span class="mode-label" id="mode-label">Smart</span>
-            </button>
             <input type="text" class="conv-text-input" id="conv-text-input" placeholder="Follow-up question..." autocomplete="off">
             <button class="conv-mic-btn" id="conv-mic-btn" title="Tap to speak">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2447,13 +2542,39 @@
       const totalMs = Math.round(ms);
 
       if (_lastServerProcessing > 0) {
-        // Normal query: show just the key number
         badge.textContent = `⚡ ${totalMs}ms · Server: ${_lastServerProcessing}ms`;
       } else {
-        // Cache hit — instant
         badge.textContent = `⚡ ${totalMs}ms · Cache Hit`;
       }
       badge.classList.add('has-value');
+
+      // Update P50 / P70 / P100 percentile stats
+      updatePercentileStats();
+    }
+
+    function updatePercentileStats() {
+      const latencies = queryLatencyHistory.map(h => h.latency).filter(l => l > 0);
+      if (latencies.length === 0) return;
+
+      const sorted = [...latencies].sort((a, b) => a - b);
+      const n = sorted.length;
+
+      function percentile(p) {
+        const idx = Math.ceil((p / 100) * n) - 1;
+        return Math.round(sorted[Math.max(0, Math.min(idx, n - 1))]);
+      }
+
+      const p50 = percentile(50);
+      const p70 = percentile(70);
+      const p100 = percentile(100);
+
+      const el50 = document.getElementById('pct-p50');
+      const el70 = document.getElementById('pct-p70');
+      const el100 = document.getElementById('pct-p100');
+
+      if (el50) el50.textContent = p50 + 'ms';
+      if (el70) el70.textContent = p70 + 'ms';
+      if (el100) el100.textContent = p100 + 'ms';
     }
 
 
@@ -2484,41 +2605,109 @@
       });
     }
 
+    // ==========================================================================
+    // MODE DROPDOWN — Gemini-style "Pro ∨" selector
+    // ==========================================================================
+    const BRAIN_MODES = [
+      { id: 'strict', name: 'Safe', desc: 'Dataset only', triggerLabel: 'Safe' },
+      { id: 'full',   name: 'Smart', desc: 'All-around help', triggerLabel: 'Smart', badge: 'New' },
+    ];
+
+    function createModeDropdown(containerId) {
+      const currentMode = BRAIN_MODES.find(m => m.id === brainMode) || BRAIN_MODES[1];
+      const wrapper = document.createElement('div');
+      wrapper.className = 'mode-dropdown-wrapper';
+      wrapper.id = containerId;
+
+      wrapper.innerHTML = `
+        <button class="mode-dropdown-trigger" title="Select brain mode">
+          <span class="mode-trigger-label">${currentMode.triggerLabel}</span>
+          <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="mode-dropdown-menu">
+          ${BRAIN_MODES.map(m => `
+            <div class="mode-dropdown-item${m.id === brainMode ? ' active' : ''}" data-mode-id="${m.id}">
+              <div class="mode-dropdown-check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <div class="mode-dropdown-info">
+                <div class="mode-dropdown-name">${m.name}</div>
+                <div class="mode-dropdown-desc">${m.desc}</div>
+              </div>
+              ${m.badge ? `<span class="mode-dropdown-badge">${m.badge}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+      return wrapper;
+    }
+
     function setupModeToggle() {
-      const btnChat = document.getElementById('btn-mode-toggle');
-      const labelChat = document.getElementById('mode-label');
-
-      const btnLanding = document.getElementById('btn-mode-toggle-landing');
-      const labelLanding = document.getElementById('mode-label-landing');
-
-      // Sync UI with current mode for all buttons
-      function syncModeUI() {
-        const isStrict = brainMode === 'strict';
-        const labelTxt = isStrict ? 'Safe' : 'Smart';
-        const titleTxt = isStrict ? 'Safe Mode (dataset only) — click to switch to Smart Mode' : 'Smart Mode (LLM + dataset) — click to switch to Safe Mode';
-
-        if (btnChat) {
-          labelChat.textContent = labelTxt;
-          btnChat.title = titleTxt;
-          btnChat.classList.toggle('strict', isStrict);
-        }
-        if (btnLanding) {
-          labelLanding.textContent = labelTxt;
-          btnLanding.title = titleTxt;
-          btnLanding.classList.toggle('strict', isStrict);
-        }
-      }
-      syncModeUI();
-
-      function toggleMode() {
-        brainMode = brainMode === 'full' ? 'strict' : 'full';
-        localStorage.setItem('brain_mode', brainMode);
-        syncModeUI();
-        console.log('Brain mode switched to:', brainMode);
+      // Inject dropdown into the landing pill (before the mic button)
+      const landingPill = document.getElementById('landing-pill');
+      const landingMic = document.getElementById('landing-mic-btn');
+      if (landingPill && landingMic) {
+        const landingDropdown = createModeDropdown('mode-dropdown-landing');
+        landingPill.insertBefore(landingDropdown, landingMic);
       }
 
-      if (btnChat) btnChat.addEventListener('click', toggleMode);
-      if (btnLanding) btnLanding.addEventListener('click', toggleMode);
+      // Inject dropdown into the conversation input bar (before the mic button)
+      const convInner = document.querySelector('.conv-input-inner');
+      const convMic = document.getElementById('conv-mic-btn');
+      if (convInner && convMic) {
+        const convDropdown = createModeDropdown('mode-dropdown-conv');
+        convInner.insertBefore(convDropdown, convMic);
+      }
+
+      // Wire up all dropdowns
+      document.querySelectorAll('.mode-dropdown-wrapper').forEach(wrapper => {
+        const trigger = wrapper.querySelector('.mode-dropdown-trigger');
+        const menu = wrapper.querySelector('.mode-dropdown-menu');
+
+        // Toggle open/close
+        trigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = wrapper.classList.contains('open');
+          // Close all other dropdowns first
+          document.querySelectorAll('.mode-dropdown-wrapper.open').forEach(w => w.classList.remove('open'));
+          if (!isOpen) wrapper.classList.add('open');
+        });
+
+        // Handle item selection
+        menu.querySelectorAll('.mode-dropdown-item').forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newMode = item.getAttribute('data-mode-id');
+            brainMode = newMode;
+            localStorage.setItem('brain_mode', brainMode);
+            wrapper.classList.remove('open');
+            syncAllModeDropdowns();
+            console.log('Brain mode switched to:', brainMode);
+          });
+        });
+      });
+
+      // Close dropdown on outside click
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.mode-dropdown-wrapper.open').forEach(w => w.classList.remove('open'));
+      });
+    }
+
+    function syncAllModeDropdowns() {
+      const currentMode = BRAIN_MODES.find(m => m.id === brainMode) || BRAIN_MODES[1];
+      document.querySelectorAll('.mode-dropdown-wrapper').forEach(wrapper => {
+        // Update trigger label
+        const label = wrapper.querySelector('.mode-trigger-label');
+        if (label) label.textContent = currentMode.triggerLabel;
+        // Update active states
+        wrapper.querySelectorAll('.mode-dropdown-item').forEach(item => {
+          item.classList.toggle('active', item.getAttribute('data-mode-id') === brainMode);
+        });
+      });
     }
 
     async function speakResponse(text, force = false) {
@@ -2747,8 +2936,7 @@
     }
 
     function updateConvStatusBadge() {
-      el.convStatusDot.className = 'badge-dot' + (USE_MOCK ? ' mock-mode' : ' active');
-      el.convStatusText.textContent = USE_MOCK ? 'Mock' : 'Live';
+      // Status badge removed — no-op
     }
 
 
@@ -2847,16 +3035,16 @@
       try {
         if (ws) ws.close();
         console.log('Connecting to WebSocket:', url);
-        el.convStatusDot.className = 'badge-dot mock-mode';
-        el.convStatusText.textContent = 'Connecting...';
+        if (el.convStatusDot) el.convStatusDot.className = 'badge-dot mock-mode';
+        if (el.convStatusText) el.convStatusText.textContent = 'Connecting...';
         ws = new WebSocket(url);
 
         ws.onopen = () => {
           console.log('WebSocket connected to', url);
           _wsReconnectAttempts = 0;  // Reset on successful connect
           USE_MOCK = false;
-          el.convStatusDot.className = 'badge-dot active';
-          el.convStatusText.textContent = 'Live';
+          if (el.convStatusDot) el.convStatusDot.className = 'badge-dot active';
+          if (el.convStatusText) el.convStatusText.textContent = 'Live';
           if (el.latencyDot) {
             el.latencyDot.className = 'latency-dot good';
           }
@@ -2873,8 +3061,8 @@
 
         ws.onerror = (err) => {
           console.warn('WebSocket error:', err);
-          el.convStatusDot.className = 'badge-dot error';
-          el.convStatusText.textContent = 'Error';
+          if (el.convStatusDot) el.convStatusDot.className = 'badge-dot error';
+          if (el.convStatusText) el.convStatusText.textContent = 'Error';
         };
 
         ws.onclose = () => {
@@ -2886,15 +3074,15 @@
             console.warn('Backend unreachable after 3 attempts — switching to demo mode');
             USE_MOCK = true;
             ws = null;
-            el.convStatusDot.className = 'badge-dot mock-mode';
-            el.convStatusText.textContent = 'Demo Mode';
+            if (el.convStatusDot) el.convStatusDot.className = 'badge-dot mock-mode';
+            if (el.convStatusText) el.convStatusText.textContent = 'Demo Mode';
             if (el.latencyDot) { el.latencyDot.className = 'latency-dot good'; }
             updateConvStatusBadge();
             return;
           }
 
-          el.convStatusDot.className = 'badge-dot error';
-          el.convStatusText.textContent = `Reconnecting (${_wsReconnectAttempts}/3)...`;
+          if (el.convStatusDot) el.convStatusDot.className = 'badge-dot error';
+          if (el.convStatusText) el.convStatusText.textContent = `Reconnecting (${_wsReconnectAttempts}/3)...`;
           if (el.latencyDot) { el.latencyDot.className = 'latency-dot bad'; }
           
           const delay = Math.min(1000 * Math.pow(2, _wsReconnectAttempts - 1), 4000);
@@ -2908,8 +3096,8 @@
       } catch (err) {
         console.error("WS connection failure:", err);
         USE_MOCK = true;
-        el.convStatusDot.className = 'badge-dot mock-mode';
-        el.convStatusText.textContent = 'Demo Mode';
+        if (el.convStatusDot) el.convStatusDot.className = 'badge-dot mock-mode';
+        if (el.convStatusText) el.convStatusText.textContent = 'Demo Mode';
         updateConvStatusBadge();
       }
     }
