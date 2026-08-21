@@ -1945,6 +1945,33 @@
       appView = 'landing';
       activeConversationId = null;
       isReplayMode = false;
+
+      // Clear previous conversation DOM completely
+      const replayIndicator = el.replayIndicator;
+      el.convContent.innerHTML = '';
+      el.convContent.appendChild(replayIndicator);  // Keep the replay indicator element
+
+      // Reset topbar for next conversation
+      el.convTopbarTitle.textContent = 'New Conversation';
+      const latencyBadge = document.getElementById('topbar-latency');
+      if (latencyBadge) {
+        latencyBadge.textContent = '';
+        latencyBadge.classList.remove('has-value');
+      }
+
+      // Stop any running mock timers
+      clearTimers();
+
+      // Reset turn state
+      currentTurnQuery = '';
+      currentTurnAnswer = '';
+      currentTurnTokens = 0;
+      currentTurnRejected = false;
+      currentTurnGuardrailReason = null;
+      currentTurnGrounding = null;
+      currentStages = { stt: 0, retrieval: 0, guardrail: 0, generation: 0 };
+
+      // Show landing, hide conversation
       el.landingScreen.classList.remove('hidden');
       el.conversationView.classList.remove('active');
       el.landingInput.value = '';
@@ -1995,6 +2022,11 @@
       if (!activeConversationId) {
         const conv = ConversationStore.create();
         activeConversationId = conv.id;
+
+        // Clear old turn blocks for a truly fresh conversation
+        const replayIndicator = el.replayIndicator;
+        el.convContent.innerHTML = '';
+        el.convContent.appendChild(replayIndicator);
       }
 
       // Transition to conversation view if on landing
