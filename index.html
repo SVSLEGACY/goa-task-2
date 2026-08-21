@@ -2174,19 +2174,47 @@
       _responseCache.set(key, answer);
     }
 
-    // Pre-warm the Render server silently on page load
-    function prewarmServer() {
-      fetch(RENDER_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: 'hi', mode: 'strict' }),
-      }).catch(() => {});
-      console.log('🔥 Server pre-warmed');
+    // Pre-warm the Render server — AGGRESSIVE cold start buster
+    // Render free tier sleeps after 15 min. Wake-up takes 30-60s.
+    // We keep pinging until server responds, so user's first query is fast.
+    let _serverReady = false;
+    async function prewarmServer() {
+      const MAX_ATTEMPTS = 10;
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        try {
+          const t0 = performance.now();
+          const resp = await fetch(RENDER_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: 'ping', mode: 'strict' }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (resp.ok) {
+            // Read body to completion so connection is freed
+            await resp.text().catch(() => {});
+            const elapsed = Math.round(performance.now() - t0);
+            _serverReady = true;
+            console.log(`🔥 Server READY (attempt ${i+1}, ${elapsed}ms)`);
+            return;
+          }
+        } catch (e) {
+          console.log(`⏳ Server waking up... (attempt ${i+1})`);
+        }
+        // Wait before retry (shorter delays for first few, then longer)
+        await new Promise(r => setTimeout(r, i < 3 ? 2000 : 5000));
+      }
+      console.warn('⚠️ Server did not respond after max attempts');
     }
+    // Fire immediately on page load
+    prewarmServer();
 
     // Network RTT calibration — measure actual round-trip time to subtract from latency
-    let _networkRtt = 0; // Will be calibrated on load
+    let _networkRtt = 0;
     async function calibrateNetworkRtt() {
+      // Wait for server to be ready first
+      while (!_serverReady) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
       const pings = [];
       for (let i = 0; i < 3; i++) {
         try {
@@ -2201,12 +2229,11 @@
         } catch {}
       }
       if (pings.length > 0) {
-        // Use minimum ping as baseline (least congestion)
         _networkRtt = Math.round(Math.min(...pings));
         console.log(`🌐 Network RTT calibrated: ${_networkRtt}ms (from ${pings.length} pings)`);
       }
     }
-    // Calibrate on load (non-blocking, also warms up server)
+    // Calibrate after server is warm
     calibrateNetworkRtt();
 
     // ==========================================================================
@@ -2445,8 +2472,60 @@
           }
           
           if (!answer.trim()) {
-            answer = '⚠️ The server is waking up from sleep. Please try asking again in a few seconds.';
-            if (textEl) textEl.textContent = answer;
+            // AUTO-RETRY: Server might be cold starting, retry automatically
+            if (!_retryCount) _retryCount = 0;
+            _retryCount++;
+            if (_retryCount <= 2) {
+              if (textEl) textEl.textContent = `⏳ Server waking up... retrying (${_retryCount}/2)`;
+              scrollToBottom();
+              console.log(`🔄 Cold start retry ${_retryCount}/2`);
+              await new Promise(r => setTimeout(r, 3000));
+              // Recursive retry - re-call the fetch
+              answer = '';
+              try {
+                const retryResp = await fetch(RENDER_API, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query: query, mode: brainMode }),
+                  signal: AbortSignal.timeout(30000),
+                });
+                if (retryResp.ok) {
+                  const retryReader = retryResp.body.getReader();
+                  const retryDecoder = new TextDecoder();
+                  let retryBuf = '';
+                  while (true) {
+                    const { done: rd, value: rv } = await retryReader.read();
+                    if (rd) break;
+                    retryBuf += retryDecoder.decode(rv, { stream: true });
+                    const rlines = retryBuf.split('\n');
+                    retryBuf = rlines.pop();
+                    for (const rl of rlines) {
+                      const rt = rl.trim();
+                      if (!rt || rt.startsWith(':')) continue;
+                      let rp = rt;
+                      if (rt.startsWith('data: ')) rp = rt.slice(6).trim();
+                      if (rp === '[DONE]') break;
+                      try {
+                        const rj = JSON.parse(rp);
+                        const rtoken = rj.answer || rj.text || rj.content || rj.delta || '';
+                        if (rtoken) {
+                          answer += rtoken;
+                          currentTurnAnswer = answer;
+                          if (textEl) textEl.textContent = answer;
+                          scrollToBottom();
+                        }
+                      } catch {}
+                    }
+                  }
+                }
+              } catch (retryErr) {
+                console.warn('Retry failed:', retryErr.message);
+              }
+            }
+            if (!answer.trim()) {
+              answer = '⚠️ Server is still waking up. Please try again in a moment.';
+              if (textEl) textEl.textContent = answer;
+            }
           }
           
           serverEndTime = performance.now();
