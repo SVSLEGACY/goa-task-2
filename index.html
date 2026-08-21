@@ -2402,9 +2402,9 @@
               }
             }
 
-            // 🔊 EARLY TTS: Fire as soon as we have enough text (>10 chars)
-            // This makes audio start generating while text is still streaming
-            if (!_earlyTtsFired && ttsEnabled && answer.length > 10) {
+            // 🔊 ULTRA-EARLY TTS: Fire as soon as ANY meaningful text arrives
+            // This makes audio generation start while text is still streaming
+            if (!_earlyTtsFired && ttsEnabled && answer.length > 5) {
               _earlyTtsFired = true;
               speakResponse(answer);  // Non-blocking, fires in background
               console.log('🔊 Early TTS fired with', answer.length, 'chars');
@@ -3405,12 +3405,17 @@
         return;
       }
 
+      // Detect mobile — Android Chrome continuous mode causes word duplication
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
       function createRecognizer() {
         const sr = new SR();
-        sr.continuous = true;
-        sr.interimResults = true;          // Live partial words instantly
-        sr.maxAlternatives = 1;            // First alternative is always best in Chrome
-        sr.lang = 'en-IN';                 // English (India) — Roman script output
+        // KEY FIX: On mobile, use single-shot mode to prevent word duplication
+        // Android Chrome's continuous mode creates overlapping result segments
+        sr.continuous = !isMobile;
+        sr.interimResults = true;
+        sr.maxAlternatives = 1;
+        sr.lang = 'en-IN';
         return sr;
       }
 
@@ -3422,7 +3427,7 @@
         _voiceRestartCount = 0;
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
         if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
-        console.log('🎙️ Voice recognition started');
+        console.log('🎙️ Voice recognition started (mobile:', isMobile, ')');
       };
 
       speechRecognition.onresult = (event) => {
@@ -3430,6 +3435,7 @@
         if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
         if (_voiceSpecPrefetchTimer) { clearTimeout(_voiceSpecPrefetchTimer); _voiceSpecPrefetchTimer = null; }
 
+        // Rebuild full transcript from ALL results (prevents duplication)
         let currentFinal = '';
         let currentInterim = '';
 
@@ -3445,7 +3451,21 @@
         _voiceFinalTranscript = currentFinal;
         _voiceInterimTranscript = currentInterim;
 
-        const fullText = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
+        // On mobile single-shot: use only the LAST result (most complete)
+        let fullText;
+        if (isMobile) {
+          // On Android, take only the latest result to avoid any duplication
+          const lastResult = event.results[event.results.length - 1];
+          fullText = lastResult[0].transcript.trim();
+          if (lastResult.isFinal) {
+            _voiceFinalTranscript = fullText;
+            _voiceInterimTranscript = '';
+          } else {
+            _voiceInterimTranscript = fullText;
+          }
+        } else {
+          fullText = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
+        }
 
         // Show in input box live
         const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
@@ -3453,9 +3473,8 @@
 
         if (!fullText) return;
 
-        // SMART SENTENCE COMPLETION — only if we have a substantial final transcript
-        // Must have at least 8 chars of FINAL text + end punctuation to auto-submit
-        if (SENTENCE_END_RE.test(_voiceFinalTranscript) && _voiceFinalTranscript.trim().length > 8) {
+        // On desktop: SMART SENTENCE COMPLETION
+        if (!isMobile && SENTENCE_END_RE.test(_voiceFinalTranscript) && _voiceFinalTranscript.trim().length > 8) {
           console.log('✅ Sentence complete, submitting immediately');
           if (_voiceSilenceTimer) { clearTimeout(_voiceSilenceTimer); _voiceSilenceTimer = null; }
           const finalQuery = _voiceFinalTranscript.trim();
@@ -3467,15 +3486,14 @@
 
         // SPECULATIVE PREFETCH — start prefetching in background as user speaks
         _voiceSpecPrefetchTimer = setTimeout(() => {
-          const partial = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
+          const partial = fullText;
           if (partial.length >= 5) {
             speculativePrefetch(partial, brainMode);
           }
         }, SPEC_PREFETCH_VOICE_MS);
 
-        // SILENCE DEBOUNCE — submit if user pauses for SILENCE_TIMEOUT_MS
-        // Only trigger if we have meaningful text (at least 3 chars of final text)
-        if (_voiceFinalTranscript.trim().length >= 3) {
+        // SILENCE DEBOUNCE — submit if user pauses (desktop only, mobile uses onend)
+        if (!isMobile && _voiceFinalTranscript.trim().length >= 3) {
           _voiceSilenceTimer = setTimeout(() => {
             if (!isListening) return;
             const finalQuery = (_voiceFinalTranscript + _voiceInterimTranscript).trim();
@@ -3491,7 +3509,6 @@
       speechRecognition.onerror = (event) => {
         console.warn('🎙️ Speech error:', event.error);
         if (event.error === 'no-speech') {
-          // No speech yet — keep waiting, restart up to 15 times (~60s)
           if (isListening && _voiceRestartCount < 15) {
             _voiceRestartCount++;
             try { speechRecognition.start(); } catch(e) {}
@@ -3499,7 +3516,6 @@
           return;
         }
         if (event.error === 'network' || event.error === 'audio-capture') {
-          // Network or audio glitch — retry with delay
           if (isListening && _voiceRestartCount < 15) {
             _voiceRestartCount++;
             setTimeout(() => {
@@ -3517,23 +3533,27 @@
       };
 
       speechRecognition.onend = () => {
-        // On Android/Mobile, the native recognizer often stops itself when user pauses.
-        // If we have transcribed text, it's safer to submit it rather than force-restart
-        // which causes UI glitches and double-listening bugs.
         if (isListening) {
-          if (_voiceFinalTranscript.trim()) {
-            console.log('✅ Voice ended with text, submitting...');
-            const fullText = _voiceFinalTranscript.trim();
+          // Get the best available text
+          const bestText = (_voiceFinalTranscript || _voiceInterimTranscript).trim();
+          
+          if (bestText) {
+            // We have text — submit it immediately
+            console.log('✅ Voice ended with text, submitting:', bestText);
             const inputEl = (_voiceContext === 'landing') ? el.landingInput : el.convTextInput;
             stopVoiceInput();
             inputEl.value = '';
-            submitQuery(fullText);
+            submitQuery(bestText);
           } else {
-            // Only try to restart if NO text was captured yet (e.g. random timeout)
-            try {
-              speechRecognition.start();
-              console.log('🔄 Voice auto-restarted (no text captured yet)');
-            } catch (e) {
+            // No text captured — restart only if not on mobile (mobile should just stop)
+            if (!isMobile) {
+              try {
+                speechRecognition.start();
+                console.log('🔄 Voice auto-restarted (no text captured yet)');
+              } catch (e) {
+                stopVoiceInput();
+              }
+            } else {
               stopVoiceInput();
             }
           }
