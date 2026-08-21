@@ -1186,6 +1186,7 @@
       }
 
       .main-area {
+        height: 100dvh;
         border-radius: 0;
         border: none;
       }
@@ -1193,24 +1194,32 @@
       .greeting-text { font-size: 26px; }
       .landing-pill { max-width: calc(100% - 16px); width: 100%; border-radius: var(--radius-lg); }
       
-      /* Conversation layout — flex column with scroll + sticky input */
+      /* Conversation layout — topbar + scroll + input all flex */
       .conversation-view {
         display: flex;
         flex-direction: column;
         height: 100%;
+        overflow: hidden;
       }
-      .conv-topbar { padding: 8px 12px; flex-shrink: 0; }
-      .conv-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-      .conv-content { padding: 12px 12px 20px; gap: 20px; }
+      .conv-topbar { 
+        padding: 8px 12px; 
+        flex-shrink: 0;
+        border-radius: 0;
+      }
+      .conv-scroll { 
+        flex: 1; 
+        min-height: 0; 
+        overflow-y: auto; 
+        -webkit-overflow-scrolling: touch; 
+      }
+      .conv-content { padding: 12px 12px 16px; gap: 18px; }
       .conv-input-bar { 
         flex-shrink: 0; 
-        padding: 6px 8px 10px; 
-        position: sticky; 
-        bottom: 0; 
-        z-index: 10;
-        background: rgba(5, 5, 10, 0.85);
+        padding: 6px 8px 10px;
+        background: rgba(5, 5, 10, 0.9);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
+        border-top: 1px solid var(--glass-border);
       }
       .conv-input-inner { padding: 4px 6px 4px 14px; }
       
