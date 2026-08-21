@@ -1164,7 +1164,7 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .app-shell { padding: 4px; gap: 4px; }
+      .app-shell { padding: 0; gap: 0; }
       .sidebar {
         position: fixed; left: 4px; top: 4px; bottom: 4px;
         z-index: 100;
@@ -1185,14 +1185,38 @@
         display: flex !important;
       }
 
+      .main-area {
+        border-radius: 0;
+        border: none;
+      }
+
       .greeting-text { font-size: 26px; }
       .landing-pill { max-width: calc(100% - 16px); width: 100%; border-radius: var(--radius-lg); }
-      .conv-content { padding: 12px 12px 100px; }
+      
+      /* Conversation layout — flex column with scroll + sticky input */
+      .conversation-view {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .conv-topbar { padding: 8px 12px; flex-shrink: 0; }
+      .conv-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      .conv-content { padding: 12px 12px 20px; gap: 20px; }
+      .conv-input-bar { 
+        flex-shrink: 0; 
+        padding: 6px 8px 10px; 
+        position: sticky; 
+        bottom: 0; 
+        z-index: 10;
+        background: rgba(5, 5, 10, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+      .conv-input-inner { padding: 4px 6px 4px 14px; }
+      
       .query-bubble { max-width: 95%; }
       .response-bubble { max-width: 98%; padding: 14px; }
-      .conv-topbar { padding: 8px 12px; }
-      .conv-input-bar { padding: 8px 12px 16px; }
-      .mode-label { display: none; } /* Hide mode text on very small screens to save space */
+      .mode-label { display: none; }
     }
 
     @media (max-width: 480px) {
@@ -3639,7 +3663,16 @@
 
     function scrollToBottom() {
       requestAnimationFrame(() => {
-        el.convScroll.scrollTop = el.convScroll.scrollHeight;
+        requestAnimationFrame(() => {
+          if (el.convScroll) {
+            el.convScroll.scrollTop = el.convScroll.scrollHeight;
+          }
+          // Fallback: scroll last message into view
+          const lastTurn = el.convContent?.querySelector('.turn-block:last-child');
+          if (lastTurn) {
+            lastTurn.scrollIntoView({ block: 'end', behavior: 'instant' });
+          }
+        });
       });
     }
 
@@ -3695,6 +3728,18 @@
       }, 3000); // Rotate every 3 seconds
     }
 
+
+    // ==========================================================================
+    // MOBILE KEYBOARD — Auto-scroll when keyboard opens/closes
+    // ==========================================================================
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        // When keyboard opens/closes, scroll to bottom so user sees latest message
+        if (document.getElementById('conversation-view')?.classList.contains('active')) {
+          scrollToBottom();
+        }
+      });
+    }
 
     // ==========================================================================
     // BOOT
